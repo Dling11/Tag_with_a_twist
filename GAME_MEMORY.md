@@ -19,7 +19,7 @@ Use this file as the handoff note for future Codex conversations. If continuing 
 ## Completed
 
 - Removed difficulty modes. The game now has one tuned progression mode.
-- Added 10 named stages with unique themes, boss names, boss HP/rewards, mob tuning, and boss skill patterns.
+- Added 11 named stages with unique themes, boss names, boss HP/rewards, mob tuning, and boss skill patterns.
 - Added desktop keyboard controls and mobile touch joystick/attack.
 - Added localStorage autosave plus JSON Save File / Load File.
 - Renamed the game from `Verdant Rush` to `Soul Dominion`; old `verdant-rush-save-v3` data is kept as a slot-1 migration fallback.
@@ -34,7 +34,7 @@ Use this file as the handoff note for future Codex conversations. If continuing 
 - Added character skills on hotkeys `1`, `2`, `3`, and `4`, plus clickable/tappable skill HUD buttons.
 - Added Green, Red, Yellow, Cyan, Void, God, and starter Blue skill definitions.
 - Added original `Void` premium character with blindfold/cloak SVG art and gravity/repel/purple-collapse abilities.
-- Added custom God SVG art and four absurd premium God skills.
+- Added custom God SVG art and five absurd premium God skills.
 - Added boss-clear celebration with portal/gate animation before stage clear.
 - Added lightweight generated WebAudio music loop plus stronger skill/ultimate/portal sound effects.
 - Renamed the premium God character display name to `The Divine One`.
@@ -45,8 +45,14 @@ Use this file as the handoff note for future Codex conversations. If continuing 
 - Added stage-specific terrain decoration sets.
 - Added mini-boss enemy spawns from stage 3 onward.
 - Improved stage 10 with more HP and new final-boss skills.
+- Added stage 11 `Prime Throne` with superboss `The One Above`.
+- `The One Above` now speaks before phase 1 begins, starts with a weaker composed phase, then vanishes during transformation dialogue and jumpscares back in as a dedicated huge winged second phase with a larger logical arena, zoomed-out camera, long dialogue, 96k HP, 48 HP/sec regeneration, delayed beams, wing-sweep beams, a cube prison with a visible directional exit, and `Absolute Decree`, a center-channel one-hit set piece. During `Absolute Decree`, the boss anchors in the arena, charges a huge `CREATION ENDS` blast for 3 seconds, spawns a farther but reachable `RUN HERE / ONLY REFUGE` sanctuary with stronger minimum distance from the player, and has a chance to merge a directional cage whose exit points toward the sanctuary before detonating the arena with radial decree rays. `Absolute Decree` has an active/cooldown lockout so it cannot overlap itself, and the cage is weighted/guaranteed to appear after several non-cage casts.
+- When `The One Above` phase 2 drops to 30% HP, he unlocks `Sovereign Wrath` / `The Above All`: the arena and boss shift to red-purple, regeneration rises to 96 HP/sec, contact and skill damage are effectively doubled, skill cadence tightens, `Absolute Decree` is more likely to merge with a cage, and a new `The Above All` beam/hazard/cage skill enters the rotation.
+- Added custom `assets/boss-one-above.svg` phase-1 art, `assets/boss-one-above-ascended.svg` phase-2 art, and prime throne terrain/decor.
+- Stage 10 is still played before stage 11; losing on stage 11 does not unlock Return Gate directly to stage 11.
 - Added `Divine Overdrive`, a 10-second blue-gold aura mode with blink movement, immunity, and all-direction divine beams.
 - Swapped The Divine One skills so `Reality Crack` is skill `4` and the more broken `Divine Overdrive` is skill `5`.
+- The Divine One execute skills use normal boss thresholds on regular bosses, but The One Above phase 2 can only be executed at 8% HP or lower. Against The One Above phase 2, Celestial Verdict direct boss damage is 7.5% max HP and Reality Crack direct boss damage is 9.5% max HP instead of their normal 28%/32% chunks.
 - Improved The Divine One music with a separate blue-gold divine theme, overdrive variation, and simple angelic choir-style sine chords.
 - Split input constants and audio into separate scripts so future skills/bosses can be expanded more safely.
 - Delayed boss-clear gate text until large skill text finishes, reducing the weird mixed-word overlap.
@@ -73,7 +79,7 @@ Use this file as the handoff note for future Codex conversations. If continuing 
 - Add a character preview animation in Loadout.
 - Add real terrain obstacles or stage portals that affect movement, not only visual decoration.
 - Add a manual test/dev shortcut only in development, not visible to players, for quickly spawning bosses.
-- Add more absurd endgame content after playtesting: an Absolute Being boss, higher weapon tiers, and more cinematic finisher cut-ins.
+- Add more absurd endgame content after playtesting: the two remaining planned superbosses, higher weapon tiers, and more cinematic finisher cut-ins.
 - Balance coin costs, stage 10 HP, and premium character damage after a few real runs.
 
 ## Verification Checklist
@@ -93,7 +99,7 @@ Use this file as the handoff note for future Codex conversations. If continuing 
   - profile slots switch active saves and rename works
   - Start Game opens the mode screen
   - Adventure starts at stage 1
-  - Stage Mode starts from `bestStage`
+  - Return Gate starts from the best cleared/unlocked stage and does not skip No One just because stage 11 was attempted
   - sound button toggles
   - weapon upgrades persist
   - weapon/character equip is visible
@@ -103,4 +109,11 @@ Use this file as the handoff note for future Codex conversations. If continuing 
   - The Divine One `5` skill shows compact `DIVINE OVERDRIVE`, keeps the aura active, and fires omnibeams
   - mobile joystick/attack/skill buttons show above sprites
   - boss clear creates portal/celebration
+  - stage 11 starts directly with The One Above
+  - The One Above gives a short pre-fight speech before phase 1 attacks start
+  - The One Above phase 1 death transforms into phase 2 instead of ending the game
+  - The One Above hides during transformation dialogue, then summons back with the ascended art, enlarged logical arena, and zoomed-out world scale
+  - The One Above dialogue overlay has no extra label and stays full-size during the zoomed arena
+  - Absolute Decree shows a warning overlay, labels the safe spot, and can one-hit even The Divine One if missed
+  - The One Above cage has a clearly labeled right-side exit and releases the player when they reach it
   - no stale test screenshots are left unless intentionally updated

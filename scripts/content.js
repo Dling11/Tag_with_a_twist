@@ -7,7 +7,7 @@
     spawnDelay: 1040,
     coinScale: 1.18,
     damage: 1,
-    maxStage: 10
+    maxStage: 11
   };
 
   const weapons = {
@@ -339,6 +339,26 @@
       nightCycle: true,
       final: true,
       clearText: "The empty throne kneels. Even silence remembers your name."
+    },
+    {
+      id: 11,
+      name: "Prime Throne",
+      bossName: "The One Above",
+      bossTitle: "Primordial Creator",
+      bossClass: "one-above",
+      skill: "oneAbove",
+      killGoal: 1,
+      hp: 4200,
+      reward: 5000,
+      enemySpeedBonus: 42,
+      spawnDelayBonus: -220,
+      coinScale: 1.6,
+      ghostChance: .12,
+      theme: "prime",
+      nightCycle: true,
+      final: true,
+      superboss: true,
+      clearText: "Creation kneels to the impossible. The dominion has heard your name."
     }
   ];
 

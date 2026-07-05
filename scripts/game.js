@@ -11,6 +11,7 @@
   } = window.VerdantRushContent;
   const saveStore = window.VerdantRushStorage;
   const inputConfig = window.VerdantRushInput;
+  const ONE_ABOVE_ARENA_SCALE = 1.75;
 
   const $ = (id) => document.getElementById(id);
   const gameWrap = $("gameWrap");
@@ -104,6 +105,7 @@
     mode: "menu",
     width: 1200,
     height: 800,
+    arenaScale: 1,
     lastTime: 0,
     elapsed: 0,
     stage: 1,
@@ -136,6 +138,8 @@
     divineOverdriveUntil: 0,
     nextDivineBeamAt: 0,
     lastBlinkAt: 0,
+    deathTaunt: "",
+    cage: null,
     screenEffectUntil: 0,
     loadoutReturn: "start",
     leaderboardReturn: "start",
@@ -161,6 +165,8 @@
     getSettings: () => state.save.settings,
     getMode: () => state.mode,
     getCharacter,
+    getStage: () => state.stage,
+    getBoss: () => state.boss,
     isDivineOverdriveActive: () => performance.now() < state.divineOverdriveUntil
   });
 
@@ -226,8 +232,11 @@
 
   function resize() {
     const rect = gameWrap.getBoundingClientRect();
-    state.width = rect.width;
-    state.height = rect.height;
+    const scale = state.arenaScale || 1;
+    state.width = rect.width * scale;
+    state.height = rect.height * scale;
+    gameWrap.style.setProperty("--arena-scale", scale.toFixed(3));
+    gameWrap.style.setProperty("--arena-view-scale", (1 / scale).toFixed(4));
     clampPlayer();
   }
 
@@ -313,6 +322,8 @@
   }
 
   function startStage(stage) {
+    state.arenaScale = 1;
+    gameWrap.classList.remove("one-above-arena");
     resize();
     clearDynamicElements();
     const stageInfo = getStageInfo(stage);
@@ -345,6 +356,8 @@
     state.divineOverdriveUntil = 0;
     state.nextDivineBeamAt = 0;
     state.lastBlinkAt = 0;
+    state.deathTaunt = "";
+    state.cage = null;
     state.screenEffectUntil = 0;
     state.nightActive = false;
     state.boss = null;
@@ -366,8 +379,12 @@
     applyStageTheme(stageInfo);
     updateHud();
     showScreen(null);
-    spawnEnemy();
-    spawnEnemy();
+    if (stageInfo.superboss) {
+      spawnBoss();
+    } else {
+      spawnEnemy();
+      spawnEnemy();
+    }
     spawnCoin();
     floatText(stageInfo.name.toUpperCase(), state.player.x, state.player.y - 70);
     state.lastTime = performance.now();
@@ -453,8 +470,9 @@
     const character = getCharacter();
     const speedBoost = getPowerTimeLeft("boost") > 0 ? 1.34 : 1;
     const divineBoost = performance.now() < state.divineOverdriveUntil ? 1.42 : 1;
-    const targetVx = dx * (state.player.speed + character.speed) * speedBoost * divineBoost;
-    const targetVy = dy * (state.player.speed + character.speed) * speedBoost * divineBoost;
+    const arenaBoost = state.arenaScale > 1 ? state.arenaScale : 1;
+    const targetVx = dx * (state.player.speed + character.speed) * speedBoost * divineBoost * arenaBoost;
+    const targetVy = dy * (state.player.speed + character.speed) * speedBoost * divineBoost * arenaBoost;
     const smoothing = 1 - Math.pow(0.0009, dt);
     state.player.vx += (targetVx - state.player.vx) * smoothing;
     state.player.vy += (targetVy - state.player.vy) * smoothing;
@@ -471,12 +489,73 @@
     }
     if (Math.abs(state.player.vx) > 8) state.player.facing = state.player.vx >= 0 ? 1 : -1;
     clampPlayer();
+    applyCageConstraint();
   }
 
   function clampPlayer() {
     const pad = state.player.r + 8;
     state.player.x = clamp(state.player.x, pad, state.width - pad);
     state.player.y = clamp(state.player.y, pad + 60, state.height - pad);
+  }
+
+  function applyCageConstraint() {
+    const cage = state.cage;
+    if (!cage) return;
+    if (performance.now() > cage.until) {
+      releaseCage();
+      return;
+    }
+    const half = cage.size / 2;
+    const gap = cage.gap;
+    const left = cage.x - half;
+    const right = cage.x + half;
+    const top = cage.y - half;
+    const bottom = cage.y + half;
+    const escape = getCageEscape(cage, { left, right, top, bottom, gap });
+    if (escape) {
+      state.player.x = escape.x;
+      state.player.y = escape.y;
+      releaseCage();
+      floatText("ESCAPED", state.player.x, state.player.y - 54);
+      return;
+    }
+    state.player.x = clamp(state.player.x, left + state.player.r, right - state.player.r);
+    state.player.y = clamp(state.player.y, top + state.player.r, bottom - state.player.r);
+  }
+
+  function getCageEscape(cage, bounds) {
+    const side = cage.exitSide || "right";
+    const halfGap = bounds.gap / 2;
+    if (side === "left" && Math.abs(state.player.y - cage.y) < halfGap && state.player.x <= bounds.left + state.player.r + 8) {
+      return {
+        x: clamp(bounds.left - state.player.r - 14, state.player.r + 8, state.width - state.player.r - 8),
+        y: state.player.y
+      };
+    }
+    if (side === "right" && Math.abs(state.player.y - cage.y) < halfGap && state.player.x >= bounds.right - state.player.r - 8) {
+      return {
+        x: clamp(bounds.right + state.player.r + 14, state.player.r + 8, state.width - state.player.r - 8),
+        y: state.player.y
+      };
+    }
+    if (side === "top" && Math.abs(state.player.x - cage.x) < halfGap && state.player.y <= bounds.top + state.player.r + 8) {
+      return {
+        x: state.player.x,
+        y: clamp(bounds.top - state.player.r - 14, state.player.r + 68, state.height - state.player.r - 8)
+      };
+    }
+    if (side === "bottom" && Math.abs(state.player.x - cage.x) < halfGap && state.player.y >= bounds.bottom - state.player.r - 8) {
+      return {
+        x: state.player.x,
+        y: clamp(bounds.bottom + state.player.r + 14, state.player.r + 68, state.height - state.player.r - 8)
+      };
+    }
+    return null;
+  }
+
+  function releaseCage() {
+    if (state.cage?.element) state.cage.element.remove();
+    state.cage = null;
   }
 
   function tryAttack() {
@@ -604,8 +683,9 @@
 
     damageEnemiesInRadius(centerX, centerY, Math.max(state.width, state.height), 130, 320);
     if (state.boss) {
-      const execute = state.boss.hp <= state.boss.maxHp * .24;
-      damageEnemy(state.boss, execute ? state.boss.hp + 1 : Math.max(900, state.boss.maxHp * .32));
+      const execute = canExecuteBoss(state.boss, .24);
+      const bossDamage = getDivineBossDamage(state.boss, .32, .095, 2200);
+      damageEnemy(state.boss, execute ? state.boss.hp + 1 : bossDamage);
     }
     state.enemyHasteUntil = 0;
     shake();
@@ -723,9 +803,10 @@
       createScreenEffect("god-finisher compact", "CELESTIAL VERDICT");
       const boss = state.boss;
       if (boss) {
-        const execute = boss.hp <= boss.maxHp * .45;
+        const execute = canExecuteBoss(boss, .45);
+        const bossDamage = getDivineBossDamage(boss, .28, .075, 1600);
         createBeam("god", aim, Math.max(state.width, state.height) * 1.2, 180, 950, execute ? "ABSOLUTE VERDICT" : "DIVINE CUT");
-        damageEnemy(boss, execute ? boss.hp + 1 : Math.max(420, boss.maxHp * .28));
+        damageEnemy(boss, execute ? boss.hp + 1 : bossDamage);
       }
       damageEnemiesInRadius(state.player.x, state.player.y, 9999, 999, 280);
       shake();
@@ -744,6 +825,16 @@
     } else if (effect === "godRealityCrack") {
       performGodRealityCrack(aim);
     }
+  }
+
+  function canExecuteBoss(boss, normalThreshold) {
+    const threshold = boss.superboss && boss.superPhase === 2 ? .08 : normalThreshold;
+    return boss.hp <= boss.maxHp * threshold;
+  }
+
+  function getDivineBossDamage(boss, normalPercent, superbossPercent, minimum) {
+    const percent = boss.superboss && boss.superPhase === 2 ? superbossPercent : normalPercent;
+    return Math.max(minimum, boss.maxHp * percent);
   }
 
   function damageEnemiesInRadius(x, y, radius, amount, bossAmount = amount) {
@@ -843,6 +934,15 @@
     setTimeout(() => element.remove(), 1200);
   }
 
+  function createPrimeWarning(title, detail, duration = 2200) {
+    gameWrap.querySelectorAll(".prime-warning").forEach((item) => item.remove());
+    const element = document.createElement("div");
+    element.className = "prime-warning";
+    element.innerHTML = `<strong>${title}</strong><span>${detail}</span>`;
+    gameWrap.appendChild(element);
+    queueAnyTimer(() => element.remove(), duration);
+  }
+
   function createBlinkTrail(fromX, fromY, toX, toY) {
     const element = document.createElement("div");
     element.className = "blink-trail";
@@ -929,19 +1029,26 @@
 
   function updateEnemies(dt) {
     const stageInfo = getStageInfo();
+    const now = performance.now();
     const freezeFactor = getPowerTimeLeft("freeze") > 0 ? .18 : 1;
-    const hasteFactor = performance.now() < state.enemyHasteUntil ? 1.34 : 1;
+    const hasteFactor = now < state.enemyHasteUntil ? 1.34 : 1;
     for (const enemy of [...state.enemies]) {
-      const dx = state.player.x - enemy.x;
-      const dy = state.player.y - enemy.y;
+      const channeling = enemy.channelingUntil && now < enemy.channelingUntil;
+      const dx = channeling ? 0 : state.player.x - enemy.x;
+      const dy = channeling ? 0 : state.player.y - enemy.y;
       const distance = Math.hypot(dx, dy) || 1;
       let moveX = dx / distance;
       let moveY = dy / distance;
       if (enemy.type === "boss" || enemy.type === "final") {
+        if (enemy.superboss && enemy.superPhase === 2) {
+          maybeActivateOneAboveWrath(enemy);
+          enemy.hp = Math.min(enemy.maxHp, enemy.hp + (enemy.wrathUnlocked ? 96 : 48) * dt);
+        }
         enemy.skillTimer -= dt * 1000;
         if (enemy.skillTimer <= 0) {
           bossSkill(enemy);
-          enemy.skillTimer = enemy.type === "final" ? 1050 : 2200;
+          enemy.skillTimer = enemy.nextSkillDelay || (enemy.superboss && enemy.superPhase === 2 ? (enemy.wrathUnlocked ? 1050 : 1450) : enemy.type === "final" ? 1050 : 2200);
+          enemy.nextSkillDelay = 0;
         }
       } else if (enemy.variant === "miniBoss") {
         enemy.skillTimer -= dt * 1000;
@@ -970,7 +1077,7 @@
       enemy.x = clamp(enemy.x, enemy.r, state.width - enemy.r);
       enemy.y = clamp(enemy.y, enemy.r + 62, state.height - enemy.r);
       enemy.facing = moveX >= 0 ? 1 : -1;
-      if (distance < enemy.r + state.player.r) {
+      if (!channeling && distance < enemy.r + state.player.r) {
         if (getPowerTimeLeft("vulnerable") > 0 && enemy.type !== "boss" && enemy.type !== "final") damageEnemy(enemy, 999);
         else if (enemy.type === "ghost") stealCoins(enemy);
         else damagePlayer(enemy.damage || gameTuning.damage);
@@ -979,6 +1086,10 @@
   }
 
   function bossSkill(boss) {
+    if (boss.superboss) {
+      oneAboveSkill(boss);
+      return;
+    }
     if (boss.type === "final") {
       finalBossSkill(boss);
       return;
@@ -1038,6 +1149,51 @@
 
   }
 
+  function oneAboveSkill(boss) {
+    if (boss.superPhase === 1) {
+      createHazard(state.player.x, state.player.y, 56, 760, 420, 1, "prime");
+      floatText("KNEEL", boss.x, boss.y - 84);
+      return;
+    }
+
+    const skill = randomOneAboveSkill(boss);
+    boss.oneAboveCasts = (boss.oneAboveCasts || 0) + 1;
+    if (skill === "decree") {
+      if (createAbsoluteDecree(boss)) {
+        boss.nextSkillDelay = isOneAboveWrath(boss) ? 3600 : 4700;
+        boss.castsSinceCage = (boss.castsSinceCage || 0) + 1;
+      } else {
+        createPrimeWingSweep(boss);
+        boss.nextSkillDelay = 1700;
+      }
+    } else if (skill === "wrathRend") {
+      createAboveAllRend(boss);
+      boss.castsSinceCage = (boss.castsSinceCage || 0) + 1;
+      boss.nextSkillDelay = 1350;
+    } else if (skill === "beams") {
+      createPrimeBeamPattern(boss);
+      boss.castsSinceCage = (boss.castsSinceCage || 0) + 1;
+      boss.nextSkillDelay = isOneAboveWrath(boss) ? 1180 : 1550;
+    } else if (skill === "cage") {
+      if (createPrimeCage(boss)) {
+        boss.castsSinceCage = 0;
+        boss.cageCooldownUntil = performance.now() + (isOneAboveWrath(boss) ? 6400 : 8500);
+        boss.nextSkillDelay = isOneAboveWrath(boss) ? 1500 : 2100;
+      } else {
+        createPrimeRain(boss);
+        boss.nextSkillDelay = 1550;
+      }
+    } else if (skill === "wings") {
+      createPrimeWingSweep(boss);
+      boss.castsSinceCage = (boss.castsSinceCage || 0) + 1;
+      boss.nextSkillDelay = isOneAboveWrath(boss) ? 1280 : 1750;
+    } else {
+      createPrimeRain(boss);
+      boss.castsSinceCage = (boss.castsSinceCage || 0) + 1;
+      boss.nextSkillDelay = isOneAboveWrath(boss) ? 1180 : 1550;
+    }
+  }
+
   function finalBossSkill(boss) {
     const skill = randomFinalSkill();
     if (skill === "emptyCross") {
@@ -1068,6 +1224,317 @@
   function randomFinalSkill() {
     const skills = ["emptyCross", "voidCollapse", "echoCourt", "emptyRain"];
     return skills[Math.floor(random(0, skills.length))];
+  }
+
+  function randomOneAboveSkill(boss) {
+    const now = performance.now();
+    const canDecree = !boss.decreeActive && now >= (boss.decreeCooldownUntil || 0);
+    const canCage = !state.cage && now >= (boss.cageCooldownUntil || 0);
+    if (canCage && (boss.castsSinceCage || 0) >= 3) return "cage";
+    const skills = ["beams", "rain", "wings", "beams", "wings"];
+    if (isOneAboveWrath(boss)) skills.push("wrathRend", "wrathRend", "rain", "beams");
+    if (canCage) skills.push("cage", "cage");
+    if (canDecree) skills.push("decree", ...(isOneAboveWrath(boss) ? ["decree"] : []));
+    return skills[Math.floor(random(0, skills.length))];
+  }
+
+  function isOneAboveWrath(boss = state.boss) {
+    return Boolean(boss?.superboss && boss.superPhase === 2 && boss.wrathUnlocked);
+  }
+
+  function oneAboveDamage(boss, amount) {
+    return isOneAboveWrath(boss) ? amount * 2 : amount;
+  }
+
+  function oneAboveEffectClass(boss, className) {
+    return isOneAboveWrath(boss) ? `${className} prime-wrath` : className;
+  }
+
+  function maybeActivateOneAboveWrath(boss) {
+    if (!boss?.superboss || boss.superPhase !== 2 || boss.wrathUnlocked || boss.hp > boss.maxHp * .3) return;
+    boss.wrathUnlocked = true;
+    boss.damage = 8;
+    boss.speedMultiplier = .5;
+    boss.skillTimer = Math.min(boss.skillTimer || 0, 520);
+    boss.nextSkillDelay = 0;
+    boss.decreeCooldownUntil = Math.min(boss.decreeCooldownUntil || 0, performance.now() + 1800);
+    boss.cageCooldownUntil = Math.min(boss.cageCooldownUntil || 0, performance.now() + 1200);
+    boss.element.classList.add("one-above-wrath");
+    gameWrap.classList.add("one-above-wrath");
+    createScreenEffect("absolute-decree prime-wrath compact", "SOVEREIGN WRATH");
+    createPrimeWarning("SOVEREIGN WRATH", "Below 30 percent, all laws become violent.", 2300);
+    createShockwave(boss.x, boss.y, 1380, "prime prime-wrath", "30%");
+    burst(boss.x, boss.y, 130, ["#ffffff", "#ff3f6e", "#b24cff", "#33114d", "#ffe66d"]);
+    floatText("THE ABOVE ALL AWAKENS", boss.x, boss.y - 190);
+    playSound("reality");
+    shake();
+    queueTimer(() => {
+      if (state.boss === boss && boss.hp > 0 && boss.superPhase === 2) createAboveAllRend(boss);
+    }, 620);
+  }
+
+  function createPrimeBeamPattern(boss) {
+    const base = Math.atan2(state.player.y - boss.y, state.player.x - boss.x);
+    const angles = [base, base + .44, base - .44];
+    angles.forEach((angle, index) => {
+      const startX = boss.x + Math.cos(angle) * 60;
+      const startY = boss.y + Math.sin(angle) * 60;
+      createTelegraphedBeam(startX, startY, angle, Math.max(state.width, state.height) * 1.35, isOneAboveWrath(boss) ? 108 : 86, isOneAboveWrath(boss) ? 620 + index * 90 : 820 + index * 120, 650, oneAboveDamage(boss, 2), oneAboveEffectClass(boss, "prime-beam"));
+    });
+    floatText(isOneAboveWrath(boss) ? "LIGHT RETURNS TO ME" : "BORROWED LIGHT", boss.x, boss.y - 126);
+    shake();
+  }
+
+  function createPrimeRain(boss) {
+    const wrath = isOneAboveWrath(boss);
+    const count = wrath ? 12 : 8;
+    for (let i = 0; i < count; i += 1) {
+      queueTimer(() => {
+        const point = i % 3 === 0 ? { x: state.player.x, y: state.player.y } : randomNearPlayer(wrath ? 340 : 260);
+        createHazard(point.x, point.y, wrath ? 82 : 70, wrath ? 390 : 560, 420, oneAboveDamage(boss, 2), oneAboveEffectClass(boss, "prime"));
+      }, i * (wrath ? 105 : 150));
+    }
+    createShockwave(boss.x, boss.y, wrath ? 640 : 480, oneAboveEffectClass(boss, "prime"), wrath ? "LAW BLEEDS" : "LAW DESCENDS");
+    floatText(wrath ? "MERCY HAS EXPIRED" : "MERCY IS A PRIVILEGE", boss.x, boss.y - 126);
+  }
+
+  function createPrimeWingSweep(boss) {
+    const centerY = clamp(state.player.y, 190, state.height - 190);
+    const wrath = isOneAboveWrath(boss);
+    createTelegraphedBeam(0, centerY - 120, 0, state.width, wrath ? 140 : 112, wrath ? 560 : 720, 720, oneAboveDamage(boss, 2), oneAboveEffectClass(boss, "prime-beam"));
+    createTelegraphedBeam(state.width, centerY + 120, Math.PI, state.width, wrath ? 140 : 112, wrath ? 770 : 980, 720, oneAboveDamage(boss, 2), oneAboveEffectClass(boss, "prime-beam"));
+    createTelegraphedBeam(boss.x, 90, Math.PI / 2, state.height, wrath ? 166 : 136, wrath ? 1040 : 1320, 820, oneAboveDamage(boss, 3), oneAboveEffectClass(boss, "prime-beam"));
+    if (wrath) createTelegraphedBeam(boss.x, state.height - 90, -Math.PI / 2, state.height, 128, 1220, 720, oneAboveDamage(boss, 2), oneAboveEffectClass(boss, "prime-beam"));
+    createShockwave(boss.x, boss.y, wrath ? 980 : 760, oneAboveEffectClass(boss, "prime"), wrath ? "WINGS OF RUIN" : "WINGS OF CREATION");
+    floatText(wrath ? "HEAVEN BREAKS BENEATH ME" : "EVERY HEAVEN CASTS MY SHADOW", boss.x, boss.y - 150);
+    shake();
+  }
+
+  function createAbsoluteDecree(boss) {
+    const now = performance.now();
+    if (boss.decreeActive || now < (boss.decreeCooldownUntil || 0)) return false;
+    const wrath = isOneAboveWrath(boss);
+    const decreeDelay = 3000;
+    boss.decreeActive = true;
+    boss.decreeCooldownUntil = now + (wrath ? 7600 : 8400);
+    const center = { x: state.width / 2, y: Math.max(300, state.height * .42) };
+    boss.x = center.x;
+    boss.y = center.y;
+    boss.vx = 0;
+    boss.vy = 0;
+    boss.channelingUntil = now + decreeDelay + 260;
+    setEntityTransform(boss.element, boss.x, boss.y, boss.facing);
+    const safeRadius = wrath ? 126 : 136;
+    const safe = chooseDecreeSafePoint(center, safeRadius);
+    const safeElement = document.createElement("div");
+    safeElement.className = "safe-zone";
+    safeElement.style.setProperty("--x", `${safe.x}px`);
+    safeElement.style.setProperty("--y", `${safe.y}px`);
+    safeElement.style.setProperty("--safe-size", `${safeRadius * 2}px`);
+    safeElement.innerHTML = "<strong>RUN HERE</strong><span>ONLY REFUGE</span>";
+    effectLayer.appendChild(safeElement);
+    const mergedCage = !state.cage && Math.random() < (wrath ? .88 : .66) && createPrimeCage(boss, {
+      duration: decreeDelay - 120,
+      exitToward: safe,
+      size: Math.min(wrath ? 430 : 390, Math.max(wrath ? 342 : 318, Math.min(state.width, state.height) * (wrath ? .24 : .22))),
+      showWarning: false,
+      text: wrath ? "WRATH CAGE" : "DECREE CAGE"
+    });
+    createDecreeCharge(boss, wrath, decreeDelay);
+    createScreenEffect(`absolute-decree${wrath ? " prime-wrath" : ""} compact`, wrath ? "ABOVE ALL DECREE" : "ABSOLUTE DECREE");
+    createPrimeWarning(wrath ? "ABOVE ALL DECREE" : "ABSOLUTE DECREE", mergedCage ? "Escape the cage, then reach the far sanctuary." : "The sanctuary is far. Run now.", decreeDelay - 180);
+    floatText("SAFE ZONE OR OBLIVION", safe.x, safe.y - safeRadius - 18);
+    floatText(wrath ? "THE FINAL LAW OPENS" : "THE CENTER OF CREATION OPENS", boss.x, boss.y - 178);
+    queueTimer(() => {
+      safeElement.classList.add("urgent");
+      createPrimeWarning("MOVE NOW", mergedCage ? "Through EXIT. Then sanctuary." : "Only the marked sanctuary survives", 1150);
+      createShockwave(boss.x, boss.y, wrath ? 1120 : 920, oneAboveEffectClass(boss, "prime decree-windup"), wrath ? "RUN" : "KNEEL");
+    }, 1280);
+    queueTimer(() => {
+      createDecreeImpact(boss, wrath);
+      const safeDistance = Math.hypot(state.player.x - safe.x, state.player.y - safe.y);
+      if (safeDistance > safeRadius) {
+        state.deathTaunt = "You are pathetic and weak.";
+        damagePlayer(999, { ignoreDivine: true, noRevive: true, ignoreInvincible: true });
+      } else {
+        floatText("REMEMBERED", state.player.x, state.player.y - 54);
+        createShockwave(state.player.x, state.player.y, 320, "prime", "REFUGE");
+      }
+      if (state.boss === boss) {
+        boss.decreeActive = false;
+        boss.channelingUntil = 0;
+        boss.decreeCooldownUntil = performance.now() + 7000;
+      }
+      shake();
+      queueTimer(() => safeElement.remove(), 520);
+    }, decreeDelay);
+    return true;
+  }
+
+  function chooseDecreeSafePoint(center, safeRadius) {
+    const minDimension = Math.min(state.width, state.height);
+    const wrath = isOneAboveWrath(state.boss);
+    const minRun = Math.min(wrath ? 1160 : 1050, Math.max(wrath ? 930 : 840, minDimension * (wrath ? .76 : .68)));
+    const maxRun = Math.min(wrath ? 1540 : 1420, Math.max(wrath ? 1240 : 1120, minDimension * (wrath ? 1.02 : .94)));
+    const minFromCenter = Math.max(360, safeRadius + state.boss.r + 80);
+    for (let i = 0; i < 130; i += 1) {
+      const angle = random(0, Math.PI * 2);
+      const distance = random(minRun, maxRun);
+      const point = {
+        x: clamp(state.player.x + Math.cos(angle) * distance, safeRadius + 40, state.width - safeRadius - 40),
+        y: clamp(state.player.y + Math.sin(angle) * distance, safeRadius + 90, state.height - safeRadius - 40)
+      };
+      const playerDistance = Math.hypot(point.x - state.player.x, point.y - state.player.y);
+      if (playerDistance < minRun * .97) continue;
+      if (Math.hypot(point.x - center.x, point.y - center.y) < minFromCenter) continue;
+      const blocked = state.decorations.some((decor) => decor.kind !== "bush" && Math.hypot(point.x - decor.x, point.y - decor.y) < decor.r + safeRadius * .38);
+      if (!blocked) return point;
+    }
+    return farthestDecreeCorner(center, safeRadius);
+  }
+
+  function farthestDecreeCorner(center, safeRadius) {
+    const marginX = safeRadius + 52;
+    const marginTop = safeRadius + 100;
+    const marginBottom = safeRadius + 52;
+    const candidates = [
+      { x: marginX, y: marginTop },
+      { x: state.width - marginX, y: marginTop },
+      { x: marginX, y: state.height - marginBottom },
+      { x: state.width - marginX, y: state.height - marginBottom }
+    ].filter((point) => Math.hypot(point.x - center.x, point.y - center.y) > safeRadius + state.boss.r + 60);
+    candidates.sort((a, b) => Math.hypot(b.x - state.player.x, b.y - state.player.y) - Math.hypot(a.x - state.player.x, a.y - state.player.y));
+    return candidates[0] || {
+      x: clamp(state.width - state.player.x, marginX, state.width - marginX),
+      y: clamp(state.height - state.player.y, marginTop, state.height - marginBottom)
+    };
+  }
+
+  function createDecreeCharge(boss, wrath = false, decreeDelay = 3000) {
+    const element = document.createElement("div");
+    element.className = `prime-decree-charge${wrath ? " prime-wrath" : ""}`;
+    element.style.setProperty("--x", `${boss.x}px`);
+    element.style.setProperty("--y", `${boss.y}px`);
+    element.innerHTML = `<strong>${wrath ? "ALL THINGS END" : "CREATION ENDS"}</strong>`;
+    effectLayer.appendChild(element);
+    queueTimer(() => element.remove(), decreeDelay + 220);
+    for (let i = 0; i < 5; i += 1) {
+      queueTimer(() => {
+        createShockwave(boss.x, boss.y, 420 + i * (wrath ? 235 : 190), oneAboveEffectClass(boss, "prime decree-windup"), "");
+        shake();
+      }, 320 + i * (wrath ? 430 : 490));
+    }
+  }
+
+  function createDecreeImpact(boss, wrath = false) {
+    createScreenEffect(`absolute-decree decree-impact${wrath ? " prime-wrath" : ""}`, wrath ? "ALL THINGS END" : "CREATION ENDS");
+    const impact = document.createElement("div");
+    impact.className = `prime-decree-impact${wrath ? " prime-wrath" : ""}`;
+    effectLayer.appendChild(impact);
+    queueTimer(() => impact.remove(), 1050);
+    const count = wrath ? 26 : 18;
+    const length = Math.max(state.width, state.height) * (wrath ? 1.42 : 1.22);
+    for (let i = 0; i < count; i += 1) {
+      const angle = (Math.PI * 2 * i) / count;
+      createBeamAt(boss.x, boss.y, `prime-beam decree-ray${wrath ? " prime-wrath" : ""}`, angle, length, wrath ? 184 : 150, 980, "");
+    }
+    createShockwave(boss.x, boss.y, Math.max(state.width, state.height) * (wrath ? 1.45 : 1.25), oneAboveEffectClass(boss, "prime decree-windup"), wrath ? "END" : "LAW");
+    queueTimer(() => shake(), 130);
+    queueTimer(() => shake(), 330);
+  }
+
+  function createAboveAllRend(boss) {
+    if (state.boss !== boss || boss.superPhase !== 2) return;
+    const centerAngle = Math.atan2(state.player.y - boss.y, state.player.x - boss.x);
+    const length = Math.max(state.width, state.height) * 1.52;
+    createScreenEffect("absolute-decree prime-wrath compact", "THE ABOVE ALL");
+    createPrimeWarning("THE ABOVE ALL", "The arena is being erased.", 1850);
+    createShockwave(boss.x, boss.y, 1180, "prime prime-wrath", "ABOVE ALL");
+    for (let i = 0; i < 6; i += 1) {
+      const angle = centerAngle + (Math.PI * 2 * i) / 6;
+      createTelegraphedBeam(boss.x, boss.y, angle, length, 118, 460 + i * 110, 760, oneAboveDamage(boss, 2), "prime-beam prime-wrath");
+    }
+    for (let i = 0; i < 10; i += 1) {
+      queueTimer(() => {
+        const point = i % 2 === 0 ? randomNearPlayer(360) : randomOpenPoint(140);
+        createHazard(point.x, point.y, 86, 300 + i * 70, 460, oneAboveDamage(boss, 2), "prime prime-wrath");
+      }, i * 80);
+    }
+    if (!state.cage && Math.random() < .45) {
+      const exitTarget = farthestDecreeCorner({ x: state.player.x, y: state.player.y }, 126);
+      createPrimeCage(boss, {
+        duration: 2600,
+        exitToward: exitTarget,
+        size: Math.min(400, Math.max(340, Math.min(state.width, state.height) * .23)),
+        text: "ABOVE ALL CAGE"
+      });
+    }
+    shake();
+    queueTimer(() => shake(), 260);
+  }
+
+  function createPrimeCage(boss = state.boss, options = {}) {
+    if (state.cage) return false;
+    releaseCage();
+    const cageX = options.x ?? state.player.x;
+    const cageY = options.y ?? state.player.y;
+    const size = options.size ?? Math.min(430, Math.max(320, Math.min(state.width, state.height) * .26));
+    const gap = Math.min(190, Math.max(148, size * .46));
+    const exitSide = options.exitSide || (options.exitToward ? getExitSideToward(cageX, cageY, options.exitToward) : "right");
+    const element = document.createElement("div");
+    element.className = `prime-cage exit-${exitSide}${isOneAboveWrath(boss) ? " prime-wrath" : ""}`;
+    element.style.setProperty("--x", `${cageX}px`);
+    element.style.setProperty("--y", `${cageY}px`);
+    element.style.setProperty("--size", `${size}px`);
+    element.style.setProperty("--gap", `${gap}px`);
+    element.style.setProperty("--gap-half", `${gap / 2}px`);
+    element.innerHTML = "<span>EXIT</span>";
+    effectLayer.appendChild(element);
+    state.cage = {
+      x: cageX,
+      y: cageY,
+      size,
+      gap,
+      exitSide,
+      until: performance.now() + (options.duration || 5400),
+      element
+    };
+    if (boss) boss.cageCooldownUntil = performance.now() + (isOneAboveWrath(boss) ? 6400 : 8500);
+    if (options.showWarning !== false) createPrimeWarning("PRIME CAGE", `Escape through the ${exitSide.toUpperCase()} exit`, 1700);
+    floatText(options.text || "ORDER HAS ONE EXIT", cageX, cageY - size / 2 - 28);
+    return true;
+  }
+
+  function getExitSideToward(x, y, point) {
+    const dx = point.x - x;
+    const dy = point.y - y;
+    if (Math.abs(dx) >= Math.abs(dy)) return dx >= 0 ? "right" : "left";
+    return dy >= 0 ? "bottom" : "top";
+  }
+
+  function createTelegraphedBeam(x, y, angle, length, width, delay, duration, damage, className) {
+    const telegraph = document.createElement("div");
+    telegraph.className = `beam-telegraph ${className}`;
+    telegraph.style.setProperty("--x", `${x}px`);
+    telegraph.style.setProperty("--y", `${y}px`);
+    telegraph.style.setProperty("--rot", `${angle}rad`);
+    telegraph.style.setProperty("--length", `${length}px`);
+    telegraph.style.setProperty("--width", `${width}px`);
+    effectLayer.appendChild(telegraph);
+    queueTimer(() => {
+      telegraph.remove();
+      const dir = { x: Math.cos(angle), y: Math.sin(angle) };
+      createBeamAt(x, y, className, angle, length, width, duration, "");
+      if (playerInBeam(x, y, dir, length, width)) damagePlayer(damage, { ignoreDivine: true });
+    }, delay);
+  }
+
+  function playerInBeam(x, y, dir, length, width) {
+    const dx = state.player.x - x;
+    const dy = state.player.y - y;
+    const forward = dx * dir.x + dy * dir.y;
+    const side = Math.abs(dx * -dir.y + dy * dir.x);
+    return forward > -70 && forward < length && side < width / 2 + state.player.r;
   }
 
   function randomBossSkill() {
@@ -1135,7 +1602,132 @@
     void enemy.element.offsetWidth;
     enemy.element.classList.add("hit");
     burst(enemy.x, enemy.y, enemy.type === "normal" ? 5 : 10, ["#fff", "#ffbd3e", "#f04452"]);
+    if (enemy.hp <= 0 && enemy.superboss && enemy.superPhase === 1) {
+      transformOneAbove(enemy);
+      return;
+    }
+    if (enemy.hp > 0 && enemy.superboss && enemy.superPhase === 2) maybeActivateOneAboveWrath(enemy);
     if (enemy.hp <= 0) killEnemy(enemy);
+  }
+
+  function playOneAboveIntro(boss) {
+    boss.element.classList.add("one-above-hidden");
+    bossBar.classList.remove("active");
+    playBossDialogue([
+      "Before your blade rises, understand what stands before you.",
+      "I am not a throne to conquer. I am the reason thrones exist.",
+      "Come, little spark. Prove why creation should remember you."
+    ], () => {
+      if (state.boss !== boss || boss.superPhase !== 1) return;
+      boss.element.classList.remove("one-above-hidden");
+      boss.element.classList.add("spawn-pop");
+      setEntityTransform(boss.element, boss.x, boss.y, boss.facing);
+      bossBar.classList.add("active");
+      boss.skillTimer = 900;
+      createScreenEffect("absolute-decree compact", "THE FIRST LAW");
+      floatText("THE FIRST LAW OPENS", boss.x, boss.y - 90);
+      queueTimer(() => boss.element.classList.remove("spawn-pop"), 360);
+    });
+  }
+
+  function transformOneAbove(boss) {
+    state.projectiles = [];
+    state.hazards = [];
+    state.particles = [];
+    state.floatingText = [];
+    effectLayer.replaceChildren();
+    releaseCage();
+    gameWrap.classList.add("one-above-arena");
+    state.arenaScale = ONE_ABOVE_ARENA_SCALE;
+    resize();
+    generateDecorations(getStageInfo());
+    state.player.x = state.width / 2;
+    state.player.y = state.height * .72;
+    state.player.vx = 0;
+    state.player.vy = 0;
+    boss.superPhase = 2;
+    boss.maxHp = 96000;
+    boss.hp = boss.maxHp;
+    boss.r = 240;
+    boss.damage = 4;
+    boss.skillTimer = 2400;
+    boss.nextSkillDelay = 0;
+    boss.oneAboveCasts = 0;
+    boss.castsSinceCage = 2;
+    boss.decreeActive = false;
+    boss.decreeCooldownUntil = 0;
+    boss.cageCooldownUntil = 0;
+    boss.wrathUnlocked = false;
+    boss.speedMultiplier = .38;
+    boss.x = state.width / 2;
+    boss.y = Math.max(260, state.height * .24);
+    boss.element.classList.remove("spawn-pop", "hit", "one-above-summon", "one-above-ascended", "one-above-wrath");
+    boss.element.classList.add("one-above-hidden");
+    setEntityTransform(boss.element, boss.x, boss.y, boss.facing);
+    updatePlayerElement();
+    burst(boss.x, boss.y, 70, ["#ffffff", "#fff2a8", "#8deaff", "#6244d8", "#1a123d"]);
+    createScreenEffect("absolute-decree", "THIS IS IMPOSSIBLE");
+    playSound("reality");
+    playBossDialogue([
+      "This is impossible.",
+      "No... it is merely delayed truth.",
+      "You call it courage. I call it ignorance.",
+      "Before your ancestors learned to breathe, I had already witnessed eternity.",
+      "Kneel... not because I command it, but because your soul remembers who created it.",
+      "Even the gods borrowed their light from me.",
+      "I do not hate you. A mountain does not hate the ant beneath it.",
+      "You believe you have challenged a god. No... you have challenged the reason gods exist.",
+      "The universe does not revolve around me. It exists because I allowed it to.",
+      "If I desired your death, history would forget you ever lived.",
+      "I am not above creation. I am the reason there is an above.",
+      "Now struggle. Worth is proven through suffering."
+    ], () => {
+      summonOneAboveAscended(boss);
+    });
+  }
+
+  function summonOneAboveAscended(boss) {
+    if (state.boss !== boss || boss.superPhase !== 2) return;
+    boss.element.classList.remove("one-above-hidden");
+    boss.element.classList.add("one-above-ascended", "one-above-summon", "final-boss");
+    setEntityTransform(boss.element, boss.x, boss.y, boss.facing);
+    burst(boss.x, boss.y, 170, ["#ffffff", "#fff2a8", "#8deaff", "#6244d8", "#080611"]);
+    createScreenEffect("absolute-decree compact", "THE ONE ABOVE DESCENDS");
+    createPrimeWarning("THE ONE ABOVE DESCENDS", "Phase two has begun");
+    shake();
+    playSound("reality");
+    queueTimer(() => {
+      boss.element.classList.remove("one-above-summon");
+      createPrimeBeamPattern(boss);
+      boss.skillTimer = 900;
+    }, 620);
+  }
+
+  function playBossDialogue(lines, onDone) {
+    state.mode = "dialogue";
+    cancelAnimationFrame(animationId);
+    const overlay = document.createElement("div");
+    overlay.className = "boss-dialogue";
+    overlay.innerHTML = `<strong>The One Above</strong><p></p>`;
+    gameWrap.appendChild(overlay);
+    let index = 0;
+    const paragraph = overlay.querySelector("p");
+    const showNext = () => {
+      paragraph.textContent = lines[index];
+      index += 1;
+      if (index >= lines.length) {
+        queueAnyTimer(() => {
+          overlay.remove();
+          state.mode = "playing";
+          state.lastTime = performance.now();
+          onDone?.();
+          animationId = requestAnimationFrame(loop);
+        }, 2400);
+      } else {
+        queueAnyTimer(showNext, 2400);
+      }
+    };
+    showNext();
   }
 
   function killEnemy(enemy) {
@@ -1230,10 +1822,10 @@
     floatText(definition.message, power.x, power.y - 28);
   }
 
-  function damagePlayer(amount = 1) {
+  function damagePlayer(amount = 1, options = {}) {
     const now = performance.now();
     const character = getCharacter();
-    if (character.god && state.stage < gameTuning.maxStage) {
+    if (!options.ignoreDivine && character.god && state.stage < gameTuning.maxStage) {
       if (now >= state.invincibleUntil) {
         state.invincibleUntil = now + 650;
         playerEl.classList.add("invincible");
@@ -1241,15 +1833,15 @@
       }
       return;
     }
-    if (character.god && now < state.divineOverdriveUntil) {
+    if (!options.ignoreDivine && character.god && now < state.divineOverdriveUntil) {
       if (now >= state.invincibleUntil) {
         state.invincibleUntil = now + 520;
         floatText("UNTOUCHED", state.player.x, state.player.y - 44);
       }
       return;
     }
-    if (now < state.invincibleUntil) return;
-    if (state.shieldCharges > 0 || getPowerTimeLeft("shield") > 0) {
+    if (!options.ignoreInvincible && now < state.invincibleUntil) return;
+    if (!options.ignoreDivine && (state.shieldCharges > 0 || getPowerTimeLeft("shield") > 0)) {
       state.shieldCharges = 0;
       state.activePowers.shield = 0;
       state.invincibleUntil = now + 850;
@@ -1271,7 +1863,7 @@
     flashDamage();
     burst(state.player.x, state.player.y, 20, ["#ff4561", "#ffffff", "#8cecff"]);
     if (state.health <= 0) {
-      if (state.save.equippedCharacter === "god") {
+      if (state.save.equippedCharacter === "god" && !options.noRevive) {
         if (state.stage < gameTuning.maxStage) state.revivesLeft = Math.max(state.revivesLeft, 1);
         else state.revivesLeft += 1;
         state.revivesLeft -= 1;
@@ -1329,23 +1921,34 @@
       stage: stageInfo.id,
       skill: stageInfo.skill,
       x: state.width / 2,
-      y: 120,
-      r: final ? 82 : 58,
+      y: stageInfo.superboss ? 150 : 120,
+      r: stageInfo.superboss ? 88 : final ? 82 : 58,
       hp,
       maxHp: hp,
       damage: final ? 2 : 1,
       reward: stageInfo.reward,
-      skillTimer: final ? 850 : 1600,
+      skillTimer: stageInfo.superboss ? 1800 : final ? 850 : 1600,
       element,
       facing: 1,
-      speedMultiplier: final ? .95 : .82
+      speedMultiplier: stageInfo.superboss ? .55 : final ? .95 : .82,
+      superboss: Boolean(stageInfo.superboss),
+      superPhase: stageInfo.superboss ? 1 : 0,
+      nextSkillDelay: 0,
+      oneAboveCasts: 0,
+      castsSinceCage: stageInfo.superboss ? 2 : 0,
+      decreeActive: false,
+      decreeCooldownUntil: 0,
+      cageCooldownUntil: 0,
+      wrathUnlocked: false
     };
     state.enemies.push(state.boss);
+    setEntityTransform(element, state.boss.x, state.boss.y, state.boss.facing);
     bossNameEl.textContent = `${stageInfo.bossName} - ${stageInfo.bossTitle}`;
-    bossBar.classList.add("active");
+    bossBar.classList.toggle("active", !stageInfo.superboss);
     playSound("boss");
     shake();
-    floatText(final ? "THE EMPTY THRONE AWAKENS" : stageInfo.bossName.toUpperCase(), state.width / 2, state.height / 2 - 80);
+    if (stageInfo.superboss) playOneAboveIntro(state.boss);
+    else floatText(final ? "THE EMPTY THRONE AWAKENS" : stageInfo.bossName.toUpperCase(), state.width / 2, state.height / 2 - 80);
   }
 
   function spawnCoin() {
@@ -1437,7 +2040,7 @@
     addLeaderboard(false);
     bossBar.classList.remove("active");
     $("finalScore").textContent = state.bankedThisRun;
-    $("finalTime").textContent = getStageInfo().name;
+    $("finalTime").textContent = state.deathTaunt || getStageInfo().name;
     $("finalBest").textContent = state.save.bestStage;
     playSound("gameOver");
     showScreen("gameOver");
@@ -1463,7 +2066,7 @@
   }
 
   function addLeaderboard(won) {
-    updateSaveBest();
+    if (won) updateSaveBest();
     state.save.leaderboard.push({
       name: state.save.profileName || "Unknown Soul",
       stage: state.stage,
@@ -1808,11 +2411,13 @@
       grave: [{ kind: "grave", count: 15, min: 42, max: 74, r: 22 }, { kind: "bush", count: 14, min: 42, max: 76, r: 22 }, { kind: "tree", count: 8, min: 74, max: 112, r: 38 }],
       mirror: [{ kind: "crystal", count: 20, min: 46, max: 92, r: 24 }, { kind: "obelisk", count: 6, min: 54, max: 86, r: 28 }, { kind: "tree", count: 8, min: 70, max: 104, r: 38 }],
       clock: [{ kind: "gear", count: 14, min: 44, max: 78, r: 24 }, { kind: "obelisk", count: 9, min: 54, max: 88, r: 28 }, { kind: "tree", count: 8, min: 70, max: 106, r: 38 }],
-      void: [{ kind: "voidspire", count: 14, min: 54, max: 96, r: 28 }, { kind: "crystal", count: 12, min: 44, max: 84, r: 24 }, { kind: "rock", count: 10, min: 42, max: 76, r: 24 }]
+      void: [{ kind: "voidspire", count: 14, min: 54, max: 96, r: 28 }, { kind: "crystal", count: 12, min: 44, max: 84, r: 24 }, { kind: "rock", count: 10, min: 42, max: 76, r: 24 }],
+      prime: [{ kind: "throne", count: 7, min: 72, max: 126, r: 34 }, { kind: "halo", count: 14, min: 42, max: 82, r: 18 }, { kind: "obelisk", count: 8, min: 54, max: 90, r: 28 }]
     };
     const decorPlan = terrain[stageInfo.theme] || terrain.bramble;
+    const decorMultiplier = stageInfo.superboss && state.arenaScale > 1 ? 2.1 : 1;
     decorPlan.forEach((plan) => {
-      for (let i = 0; i < plan.count; i += 1) {
+      for (let i = 0; i < Math.round(plan.count * decorMultiplier); i += 1) {
         const x = random(40, state.width - 40);
         const y = random(110, state.height - 30);
         if (Math.hypot(x - state.width / 2, y - state.height / 2) < 145) {
@@ -1900,12 +2505,13 @@
   function updatePlayerElement() {
     setEntityTransform(playerEl, state.player.x, state.player.y, state.player.facing);
     playerEl.style.zIndex = String(20 + Math.round(state.player.y));
-    nightOverlay.style.setProperty("--px", `${state.player.x}px`);
-    nightOverlay.style.setProperty("--py", `${state.player.y}px`);
+    const viewScale = 1 / (state.arenaScale || 1);
+    nightOverlay.style.setProperty("--px", `${state.player.x * viewScale}px`);
+    nightOverlay.style.setProperty("--py", `${state.player.y * viewScale}px`);
   }
 
   function updateBossBar() {
-    if (!state.boss) {
+    if (!state.boss || state.boss.element.classList.contains("one-above-hidden")) {
       bossBar.classList.remove("active");
       return;
     }
@@ -2023,6 +2629,11 @@
     state.renderedPowers = "";
     state.shieldCharges = 0;
     state.boss = null;
+    state.deathTaunt = "";
+    state.arenaScale = 1;
+    gameWrap.style.setProperty("--arena-scale", "1");
+    gameWrap.style.setProperty("--arena-view-scale", "1");
+    releaseCage();
     state.divineOverdriveUntil = 0;
     state.nextDivineBeamAt = 0;
     state.lastBlinkAt = 0;
@@ -2030,14 +2641,18 @@
     enemyLayer.replaceChildren();
     pickupLayer.replaceChildren();
     effectLayer.replaceChildren();
+    gameWrap.querySelectorAll(".boss-dialogue").forEach((item) => item.remove());
+    gameWrap.querySelectorAll(".prime-warning").forEach((item) => item.remove());
     powerStatus.replaceChildren();
     playerEl.classList.remove("boosted", "shielded", "low-health", "invincible", "divine-overdrive");
+    gameWrap.classList.remove("one-above-arena", "one-above-wrath");
     nightOverlay.classList.remove("active");
   }
 
   function setEntityTransform(element, x, y, facing = 1) {
     element.style.setProperty("--x", `${x}px`);
     element.style.setProperty("--y", `${y}px`);
+    element.style.setProperty("--sx", String(facing));
     element.style.transform = `translate3d(${x}px, ${y}px, 0) scaleX(${facing})`;
   }
 

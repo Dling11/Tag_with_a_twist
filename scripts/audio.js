@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  function createAudioSystem({ getSettings, getMode, getCharacter, isDivineOverdriveActive }) {
+  function createAudioSystem({ getSettings, getMode, getCharacter, getStage, getBoss, isDivineOverdriveActive }) {
     let audioContext = null;
     let musicTimer = 0;
     let musicStep = 0;
@@ -31,6 +31,11 @@
 
     function playMusicStep() {
       const character = getCharacter();
+      const boss = getBoss?.();
+      if (getStage?.() === 11 || boss?.superboss) {
+        playOneAboveTheme(boss);
+        return;
+      }
       if (character.god) {
         playDivineTheme();
         return;
@@ -41,6 +46,20 @@
         : [262, 330, 392, 523];
       const note = track[musicStep % track.length];
       playTone(note, .16, character.void ? "sawtooth" : "sine", character.void ? .026 : .016);
+      musicStep += 1;
+    }
+
+    function playOneAboveTheme(boss) {
+      const ascended = boss?.superPhase === 2;
+      const drone = ascended ? [55, 61, 73, 82] : [73, 82, 98, 110];
+      const chant = ascended ? [147, 165, 196, 247, 294, 392] : [123, 147, 196, 247];
+      const low = drone[musicStep % drone.length];
+      const note = chant[Math.floor(musicStep / 2) % chant.length];
+
+      playTone(low, ascended ? .82 : .7, "sawtooth", ascended ? .026 : .018, low * .995);
+      playTone(note, ascended ? .42 : .34, "triangle", ascended ? .018 : .012);
+      if (musicStep % 3 === 2) playTone(note * 2, .9, "sine", ascended ? .012 : .008, note * 2.01);
+      if (ascended && musicStep % 4 === 1) playTone(41, .65, "square", .012);
       musicStep += 1;
     }
 

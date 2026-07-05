@@ -53,7 +53,7 @@
       ? candidate.leaderboard.slice(0, 8).map((run) => ({ ...run, name: cleanName(run.name || profileName, profileName) }))
       : [];
     const coins = Math.max(0, Math.floor(Number(candidate.coins) || 0));
-    const bestStage = Math.max(1, Math.min(10, Math.floor(Number(candidate.bestStage) || 1)));
+    const bestStage = Math.max(1, Math.min(11, Math.floor(Number(candidate.bestStage) || 1)));
     const weaponLevels = {};
     for (const id of ownedWeapons) {
       const level = Math.floor(Number(candidate.weaponLevels?.[id]) || 1);
