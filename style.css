@@ -483,6 +483,13 @@ button {
   box-shadow: 0 0 44px rgba(83, 217, 255, .82), 0 0 66px rgba(255, 224, 91, .72);
 }
 
+.skill-beam.reality-cut {
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 1), rgba(103, 230, 255, .92) 24%, rgba(255, 224, 91, .9) 44%, rgba(141, 89, 255, .7) 62%, rgba(0, 0, 0, .04));
+  box-shadow: 0 0 64px rgba(255, 255, 255, .9), 0 0 96px rgba(141, 89, 255, .82);
+  mix-blend-mode: screen;
+}
+
 .screen-effect {
   inset: 0;
   z-index: 900;
@@ -1125,6 +1132,110 @@ h2 {
   margin-top: 8px;
   font-size: clamp(19px, 4vw, 25px);
   line-height: 1.05;
+}
+
+.profile-panel {
+  margin: 18px 0 16px;
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(22, 50, 46, .12);
+  background:
+    linear-gradient(135deg, rgba(255, 247, 223, .92), rgba(231, 249, 255, .7)),
+    rgba(255, 255, 255, .68);
+}
+
+.profile-panel-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.profile-panel-head span,
+.profile-slot span,
+.mode-card span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.profile-panel-head strong {
+  color: var(--ink);
+  font-size: 18px;
+}
+
+.profile-slots,
+.mode-grid {
+  display: grid;
+  gap: 8px;
+}
+
+.profile-slots {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-bottom: 9px;
+}
+
+.profile-slot,
+.mode-card {
+  min-height: 78px;
+  border-radius: 8px;
+  border: 1px solid rgba(22, 50, 46, .12);
+  background: rgba(255, 255, 255, .68);
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+.profile-slot {
+  padding: 10px;
+}
+
+.profile-slot.active {
+  border-color: rgba(255, 189, 62, .82);
+  background: #fff7df;
+  box-shadow: 0 10px 22px rgba(190, 103, 20, .16);
+}
+
+.profile-slot strong,
+.profile-slot em,
+.mode-card strong {
+  display: block;
+}
+
+.profile-slot strong {
+  margin-top: 4px;
+  font-size: 16px;
+}
+
+.profile-slot em {
+  margin-top: 5px;
+  color: #5f766b;
+  font-size: 11px;
+  font-style: normal;
+  line-height: 1.25;
+}
+
+.mode-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 18px 0 16px;
+}
+
+.mode-card {
+  padding: 14px;
+}
+
+.mode-card strong {
+  margin-top: 7px;
+  font-size: 18px;
+  line-height: 1.08;
+}
+
+.mode-card:hover,
+.profile-slot:hover {
+  transform: translateY(-2px);
+  border-color: rgba(31, 196, 214, .42);
 }
 
 .equipped-strip,
@@ -1814,6 +1925,8 @@ h2 {
   }
 
   .run-card,
+  .profile-slots,
+  .mode-grid,
   .equipped-strip,
   .loadout-summary,
   .results,
@@ -1840,9 +1953,15 @@ h2 {
   }
 
   .skill-slot {
-    width: min(78px, 21vw);
+    width: min(68px, 18vw);
     min-height: 58px;
+    grid-template-columns: 20px 1fr;
     padding: 7px;
+  }
+
+  .skill-slot span {
+    width: 20px;
+    height: 20px;
   }
 
   .skill-slot strong {

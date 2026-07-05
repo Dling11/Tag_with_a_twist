@@ -10,6 +10,7 @@
     defaultSave
   } = window.VerdantRushContent;
   const saveStore = window.VerdantRushStorage;
+  const inputConfig = window.VerdantRushInput;
 
   const $ = (id) => document.getElementById(id);
   const gameWrap = $("gameWrap");
@@ -36,6 +37,8 @@
   const saveInput = $("saveInput");
   const nextStagePreview = $("nextStagePreview");
   const nextBossPreview = $("nextBossPreview");
+  const activeProfileValue = $("activeProfileValue");
+  const profileSlots = $("profileSlots");
   const equippedWeaponValue = $("equippedWeaponValue");
   const equippedCharacterValue = $("equippedCharacterValue");
   const loadoutWeaponValue = $("loadoutWeaponValue");
@@ -53,6 +56,7 @@
 
   const screens = {
     start: $("startScreen"),
+    mode: $("modeScreen"),
     instructions: $("instructionsScreen"),
     shop: $("shopScreen"),
     inventory: $("inventoryScreen"),
@@ -73,6 +77,12 @@
     shopBack: $("shopBackBtn"),
     leaderboard: $("leaderboardBtn"),
     leaderboardBack: $("leaderboardBackBtn"),
+    renameProfile: $("renameProfileBtn"),
+    adventure: $("adventureBtn"),
+    stageMode: $("stageModeBtn"),
+    modeInventory: $("modeInventoryBtn"),
+    modeLeaderboard: $("modeLeaderboardBtn"),
+    modeBack: $("modeBackBtn"),
     settings: $("settingsBtn"),
     settingsPause: $("settingsPauseBtn"),
     save: $("saveBtn"),
@@ -128,6 +138,7 @@
     lastBlinkAt: 0,
     screenEffectUntil: 0,
     loadoutReturn: "start",
+    leaderboardReturn: "start",
     enemyHasteUntil: 0,
     nightActive: false,
     boss: null,
@@ -145,10 +156,13 @@
   };
 
   const keys = new Set();
-  let audioContext = null;
   let animationId = 0;
-  let musicTimer = 0;
-  let musicStep = 0;
+  const audio = window.VerdantRushAudio.createAudioSystem({
+    getSettings: () => state.save.settings,
+    getMode: () => state.mode,
+    getCharacter,
+    isDivineOverdriveActive: () => performance.now() < state.divineOverdriveUntil
+  });
 
   boot();
 
@@ -160,6 +174,7 @@
     renderShop();
     renderLoadout();
     renderLeaderboard();
+    renderProfiles();
     updateHud();
     updateStartPreview();
     updateEquippedSummary();
@@ -173,15 +188,20 @@
     window.addEventListener("resize", resize);
     window.addEventListener("keydown", handleKeyDown);
     window.addEventListener("keyup", (event) => keys.delete(event.key.toLowerCase()));
-    buttons.start.addEventListener("click", () => { playSound("click"); startRun(1); });
+    buttons.start.addEventListener("click", () => { playSound("click"); showScreen("mode"); });
+    buttons.adventure.addEventListener("click", () => { playSound("click"); startRun(1); });
+    buttons.stageMode.addEventListener("click", () => { playSound("click"); startRun(Math.min(gameTuning.maxStage, state.save.bestStage || 1)); });
+    buttons.modeInventory.addEventListener("click", () => openInventory("mode"));
+    buttons.modeLeaderboard.addEventListener("click", () => openLeaderboard("mode"));
+    buttons.modeBack.addEventListener("click", () => { playSound("click"); showScreen("start"); });
     buttons.instructions.addEventListener("click", () => { playSound("click"); showScreen("instructions"); });
     buttons.back.addEventListener("click", () => { playSound("click"); showScreen("start"); });
-    buttons.shop.addEventListener("click", () => openShop("start"));
     buttons.inventory.addEventListener("click", () => openInventory("start"));
     buttons.inventoryBack.addEventListener("click", () => closeInventory());
     buttons.shopBack.addEventListener("click", () => closeShop());
-    buttons.leaderboard.addEventListener("click", () => { playSound("click"); renderLeaderboard(); showScreen("leaderboard"); });
-    buttons.leaderboardBack.addEventListener("click", () => { playSound("click"); showScreen("start"); });
+    buttons.leaderboard.addEventListener("click", () => openLeaderboard("start"));
+    buttons.leaderboardBack.addEventListener("click", () => { playSound("click"); showScreen(state.leaderboardReturn === "mode" ? "mode" : "start"); });
+    buttons.renameProfile.addEventListener("click", renameActiveProfile);
     buttons.settings.addEventListener("click", toggleSound);
     buttons.settingsPause.addEventListener("click", toggleSound);
     buttons.save.addEventListener("click", exportSaveFile);
@@ -213,7 +233,7 @@
 
   function handleKeyDown(event) {
     const key = event.key.toLowerCase();
-    if (["arrowup", "arrowdown", "arrowleft", "arrowright", "w", "a", "s", "d", " ", "j", "1", "2", "3", "4"].includes(key)) {
+    if (inputConfig.handledKeys.has(key)) {
       event.preventDefault();
     }
     if (key === "escape") {
@@ -221,10 +241,10 @@
       else if (state.mode === "paused") resumeGame();
       return;
     }
-    if ((key === " " || key === "j") && state.mode === "playing") {
+    if (inputConfig.attackKeys.includes(key) && state.mode === "playing") {
       state.attackQueued = true;
     }
-    if (["1", "2", "3", "4"].includes(key) && state.mode === "playing") {
+    if (inputConfig.skillKeys.includes(key) && state.mode === "playing") {
       useSkill(Number(key));
       return;
     }
@@ -565,6 +585,35 @@
     }
   }
 
+  function performGodRealityCrack(aim) {
+    const length = Math.max(state.width, state.height) * 1.5;
+    const centerX = state.player.x;
+    const centerY = state.player.y;
+    const angles = [
+      Math.atan2(aim.y, aim.x),
+      Math.atan2(aim.y, aim.x) + Math.PI / 2,
+      Math.atan2(aim.y, aim.x) - Math.PI / 3
+    ];
+
+    createScreenEffect("reality-crack compact", "REALITY CRACK");
+    for (const angle of angles) {
+      const dir = { x: Math.cos(angle), y: Math.sin(angle) };
+      createBeamAt(centerX - dir.x * 120, centerY - dir.y * 120, "reality-cut", angle, length, 138, 920, "");
+      damageEnemiesInBeamFrom(centerX - dir.x * 120, centerY - dir.y * 120, dir, length, 166, 360, 880);
+    }
+
+    damageEnemiesInRadius(centerX, centerY, Math.max(state.width, state.height), 130, 320);
+    if (state.boss) {
+      const execute = state.boss.hp <= state.boss.maxHp * .24;
+      damageEnemy(state.boss, execute ? state.boss.hp + 1 : Math.max(900, state.boss.maxHp * .32));
+    }
+    state.enemyHasteUntil = 0;
+    shake();
+    queueTimer(() => shake(), 160);
+    queueTimer(() => shake(), 360);
+    playSound("reality");
+  }
+
   function useSkill(slot) {
     const character = getCharacter();
     const skill = character.skills?.find((item) => item.slot === slot);
@@ -692,6 +741,8 @@
       queueTimer(() => shake(), 220);
       queueTimer(() => shake(), 520);
       playSound("ultimate");
+    } else if (effect === "godRealityCrack") {
+      performGodRealityCrack(aim);
     }
   }
 
@@ -1369,6 +1420,7 @@
     cancelAnimationFrame(animationId);
     stopMusic();
     bankCoins();
+    askChampionName();
     addLeaderboard(true);
     bossBar.classList.remove("active");
     nightOverlay.classList.add("active");
@@ -1400,17 +1452,20 @@
     renderShop();
     renderLoadout();
     updateEquippedSummary();
+    renderProfiles();
     persistSave();
   }
 
   function updateSaveBest() {
     state.save.bestStage = Math.max(state.save.bestStage, state.stage);
     updateStartPreview();
+    renderProfiles();
   }
 
   function addLeaderboard(won) {
     updateSaveBest();
     state.save.leaderboard.push({
+      name: state.save.profileName || "Unknown Soul",
       stage: state.stage,
       stageName: getStageInfo().name,
       coins: state.bankedThisRun,
@@ -1446,7 +1501,75 @@
 
   function closeInventory() {
     playSound("click");
-    showScreen(state.loadoutReturn === "stageClear" ? "stageClear" : "start");
+    showScreen(state.loadoutReturn === "stageClear" ? "stageClear" : state.loadoutReturn === "mode" ? "mode" : "start");
+  }
+
+  function openLeaderboard(returnScreen = "start") {
+    playSound("click");
+    state.leaderboardReturn = returnScreen;
+    renderLeaderboard();
+    showScreen("leaderboard");
+  }
+
+  function renderProfiles() {
+    if (!profileSlots) return;
+    const profiles = saveStore.getProfileSummaries();
+    profileSlots.replaceChildren();
+    if (activeProfileValue) activeProfileValue.textContent = state.save.profileName || "Unknown Soul";
+    for (const profile of profiles) {
+      const button = document.createElement("button");
+      button.className = `profile-slot${profile.slot === state.save.profileSlot ? " active" : ""}`;
+      button.type = "button";
+      button.innerHTML = `
+        <span>Slot ${profile.slot}</span>
+        <strong>${profile.profileName}</strong>
+        <em>Gate ${profile.bestStage} - ${profile.coins} coins</em>
+      `;
+      button.addEventListener("click", () => switchProfile(profile.slot));
+      profileSlots.appendChild(button);
+    }
+  }
+
+  function switchProfile(slot) {
+    if (slot === state.save.profileSlot) return;
+    persistSave();
+    state.save = saveStore.loadSave(slot);
+    playSound("click");
+    refreshForSaveChange();
+    showScreen("start");
+  }
+
+  function renameActiveProfile() {
+    const currentName = state.save.profileName || "Unknown Soul";
+    const nextName = window.prompt("Name this soul:", currentName);
+    if (nextName === null) return;
+    updateProfileName(nextName);
+  }
+
+  function askChampionName() {
+    const nextName = window.prompt("Champion name for the Hall of Souls:", state.save.profileName || "Rowell");
+    if (nextName !== null) updateProfileName(nextName);
+  }
+
+  function updateProfileName(name) {
+    const cleaned = String(name || "").replace(/\s+/g, " ").trim().slice(0, 18);
+    state.save.profileName = cleaned || state.save.profileName || "Unknown Soul";
+    renderProfiles();
+    persistSave();
+  }
+
+  function refreshForSaveChange() {
+    renderShop();
+    renderLoadout();
+    renderLeaderboard();
+    renderProfiles();
+    updatePlayerSkin();
+    updateHud();
+    updateStartPreview();
+    updateEquippedSummary();
+    updateSettingsButtons();
+    renderSkillHud(true);
+    persistSave();
   }
 
   function renderShop() {
@@ -1637,13 +1760,14 @@
     leaderboardList.replaceChildren();
     if (!state.save.leaderboard.length) {
       const empty = document.createElement("li");
-      empty.textContent = "No runs yet. Go make the forest nervous.";
+      empty.textContent = "No souls recorded yet. Go make the dominion remember you.";
       leaderboardList.appendChild(empty);
       return;
     }
     for (const run of state.save.leaderboard) {
       const li = document.createElement("li");
-      li.textContent = `${run.won ? "Victory" : run.stageName || `Stage ${run.stage}`} - ${run.coins} coins - ${run.character} / ${run.weapon} - ${run.date}`;
+      const name = run.name || state.save.profileName || "Unknown Soul";
+      li.textContent = `${name} - ${run.won ? "Victory" : run.stageName || `Stage ${run.stage}`} - ${run.coins} coins - ${run.character} / ${run.weapon} - ${run.date}`;
       leaderboardList.appendChild(li);
     }
   }
@@ -1659,15 +1783,7 @@
     saveStore.readSaveFile(file)
       .then((loaded) => {
         state.save = loaded;
-        renderShop();
-        renderLoadout();
-        renderLeaderboard();
-        updatePlayerSkin();
-        updateHud();
-        updateStartPreview();
-        updateEquippedSummary();
-        renderSkillHud(true);
-        persistSave();
+        refreshForSaveChange();
         playSound("power");
         showScreen("start");
       })
@@ -2068,94 +2184,19 @@
   }
 
   function startMusic() {
-    if (musicTimer || state.save.settings?.music === false) return;
-    musicStep = 0;
-    musicTimer = window.setInterval(() => {
-      if (state.mode !== "playing") return;
-      const character = getCharacter();
-      const track = character.god
-        ? [196, 247, 294, 392, 588, 784]
-        : character.void
-          ? [131, 196, 262, 392, 523]
-          : [262, 330, 392, 523];
-      const note = track[musicStep % track.length];
-      const wave = character.void ? "sawtooth" : character.god ? "triangle" : "sine";
-      const volume = character.god || character.void ? .026 : .016;
-      playTone(note, .16, wave, volume);
-      musicStep += 1;
-    }, 780);
+    audio.startMusic();
   }
 
   function stopMusic() {
-    if (!musicTimer) return;
-    window.clearInterval(musicTimer);
-    musicTimer = 0;
-  }
-
-  function ensureAudioContext() {
-    audioContext ||= new (window.AudioContext || window.webkitAudioContext)();
-    if (audioContext.state === "suspended") audioContext.resume();
-    return audioContext;
+    audio.stopMusic();
   }
 
   function playTone(frequency, duration, wave = "sine", volume = .04, endFrequency = frequency) {
-    if (state.save.settings?.music === false && volume <= .03) return;
-    if (state.save.settings?.sfx === false && volume > .03) return;
-    try {
-      const context = ensureAudioContext();
-      const now = context.currentTime;
-      const oscillator = context.createOscillator();
-      const gain = context.createGain();
-      oscillator.connect(gain);
-      gain.connect(context.destination);
-      oscillator.type = wave;
-      oscillator.frequency.setValueAtTime(frequency, now);
-      oscillator.frequency.exponentialRampToValueAtTime(Math.max(40, endFrequency), now + duration);
-      gain.gain.setValueAtTime(0.0001, now);
-      gain.gain.exponentialRampToValueAtTime(volume, now + .016);
-      gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
-      oscillator.start(now);
-      oscillator.stop(now + duration + .03);
-    } catch {
-      audioContext = null;
-    }
+    audio.playTone(frequency, duration, wave, volume, endFrequency);
   }
 
   function playSound(type) {
-    if (state.save.settings?.sfx === false) return;
-    try {
-      audioContext = ensureAudioContext();
-      const now = audioContext.currentTime;
-      const oscillator = audioContext.createOscillator();
-      const gain = audioContext.createGain();
-      oscillator.connect(gain);
-      gain.connect(audioContext.destination);
-      const sounds = {
-        click: { wave: "triangle", start: 360, end: 460, duration: .07, volume: .055 },
-        attack: { wave: "square", start: 260, end: 130, duration: .08, volume: .05 },
-        coin: { wave: "sine", start: 720, end: 1180, duration: .12, volume: .08 },
-        heal: { wave: "sine", start: 440, end: 820, duration: .18, volume: .075 },
-        power: { wave: "square", start: 520, end: 980, duration: .22, volume: .065 },
-        boss: { wave: "sawtooth", start: 110, end: 55, duration: .42, volume: .08 },
-        victory: { wave: "triangle", start: 440, end: 880, duration: .5, volume: .08 },
-        damage: { wave: "sawtooth", start: 130, end: 58, duration: .2, volume: .09 },
-        gameOver: { wave: "triangle", start: 210, end: 64, duration: .46, volume: .08 },
-        skill: { wave: "sawtooth", start: 260, end: 720, duration: .24, volume: .075 },
-        ultimate: { wave: "square", start: 92, end: 860, duration: .62, volume: .09 },
-        portal: { wave: "triangle", start: 190, end: 980, duration: .55, volume: .085 }
-      };
-      const sound = sounds[type] || sounds.click;
-      oscillator.type = sound.wave;
-      oscillator.frequency.setValueAtTime(sound.start, now);
-      oscillator.frequency.exponentialRampToValueAtTime(Math.max(40, sound.end), now + sound.duration);
-      gain.gain.setValueAtTime(0.0001, now);
-      gain.gain.exponentialRampToValueAtTime(sound.volume, now + .012);
-      gain.gain.exponentialRampToValueAtTime(0.0001, now + sound.duration);
-      oscillator.start(now);
-      oscillator.stop(now + sound.duration + .02);
-    } catch {
-      audioContext = null;
-    }
+    audio.playSound(type);
   }
 
   function formatTime(ms) {

@@ -157,7 +157,8 @@
         { slot: 1, name: "Divine Pulse", cooldown: 7000, effect: "godShockwave", desc: "A holy shockwave that rejects anything nearby." },
         { slot: 2, name: "Judgment Rain", cooldown: 13000, effect: "godJudgment", desc: "Golden strikes hit everything visible." },
         { slot: 3, name: "Celestial Verdict", cooldown: 22000, effect: "godFinisher", desc: "A divine finisher that can execute weakened bosses." },
-        { slot: 4, name: "Divine Overdrive", cooldown: 42000, effect: "godReality", desc: "Ten seconds of blue-gold aura, blink steps, immunity, and omnibeams." }
+        { slot: 4, name: "Reality Crack", cooldown: 56000, effect: "godRealityCrack", desc: "Cracks the arena open with screen-splitting divine judgment." },
+        { slot: 5, name: "Divine Overdrive", cooldown: 42000, effect: "godReality", desc: "Ten seconds of blue-gold aura, blink steps, immunity, and omnibeams." }
       ],
       desc: "A fearless divine being wrapped in blue-gold aura, judgment beams, and impossible revives."
     }
@@ -358,6 +359,8 @@
     equippedCharacter: "blue",
     leaderboard: [],
     bestStage: 1,
+    profileSlot: 1,
+    profileName: "Rowell",
     settings: {
       music: true,
       sfx: true

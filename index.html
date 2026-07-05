@@ -3,13 +3,13 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Verdant Rush</title>
+    <title>Soul Dominion</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='28' fill='%231fc4d6'/%3E%3Cpath d='M18 36c7 8 21 8 28 0' stroke='%2316322e' stroke-width='5' fill='none' stroke-linecap='round'/%3E%3Ccircle cx='23' cy='25' r='4' fill='%2316322e'/%3E%3Ccircle cx='41' cy='25' r='4' fill='%2316322e'/%3E%3C/svg%3E">
-    <link rel="stylesheet" href="style.css?v=3">
+    <link rel="stylesheet" href="style.css?v=4">
   </head>
   <body>
     <main id="app" class="app">
-      <section id="gameWrap" class="game-wrap" aria-label="Verdant Rush game area">
+      <section id="gameWrap" class="game-wrap" aria-label="Soul Dominion game area">
         <div id="world" class="world">
           <div id="decorLayer" class="layer decor-layer"></div>
           <div id="pickupLayer" class="layer pickup-layer"></div>
@@ -63,9 +63,17 @@
 
         <section id="startScreen" class="screen active">
           <div class="menu-panel">
-            <p class="eyebrow">Stage action survival</p>
-            <h1>Verdant Rush</h1>
-            <p class="summary">Fight through 10 handcrafted stages, unlock stronger builds, and challenge the empty throne named No One.</p>
+            <p class="eyebrow">Soul profile active</p>
+            <h1>Soul Dominion</h1>
+            <p class="summary">Choose a soul, enter the dominion, and carve your name into the run history.</p>
+            <div class="profile-panel">
+              <div class="profile-panel-head">
+                <span>Current soul</span>
+                <strong id="activeProfileValue">Rowell</strong>
+              </div>
+              <div id="profileSlots" class="profile-slots" aria-label="Profile slots"></div>
+              <button id="renameProfileBtn" class="ghost-btn wide" type="button">Rename Soul</button>
+            </div>
             <div class="run-card">
               <div>
                 <span>Best reached</span>
@@ -87,13 +95,12 @@
               </div>
             </div>
             <div class="menu-actions">
-              <button id="startBtn" class="primary-btn" type="button"><span>Start Run</span></button>
+              <button id="startBtn" class="primary-btn" type="button"><span>Start Game</span></button>
               <button id="instructionsBtn" class="secondary-btn" type="button">Instructions</button>
             </div>
             <div class="menu-actions thin">
-              <button id="shopBtn" class="secondary-btn" type="button">Shop</button>
               <button id="inventoryBtn" class="secondary-btn" type="button">Inventory</button>
-              <button id="leaderboardBtn" class="secondary-btn" type="button">Leaderboard</button>
+              <button id="leaderboardBtn" class="secondary-btn" type="button">Hall of Souls</button>
               <button id="settingsBtn" class="secondary-btn" type="button">Sound On</button>
               <button id="saveBtn" class="secondary-btn" type="button">Save File</button>
               <button id="loadBtn" class="secondary-btn" type="button">Load File</button>
@@ -109,7 +116,7 @@
             <ul class="instructions">
               <li>Use <strong>WASD</strong> or <strong>Arrow Keys</strong> to move.</li>
               <li>Press <strong>Space</strong> or <strong>J</strong> to attack.</li>
-              <li>Press <strong>1</strong>, <strong>2</strong>, <strong>3</strong>, and <strong>4</strong> for character skills.</li>
+              <li>Press <strong>1</strong> through <strong>5</strong> for character skills.</li>
               <li>Defeat enough enemies to summon each stage boss.</li>
               <li>Open the shop between stages to buy weapons and characters.</li>
               <li>Your progress autosaves in this browser. Save File and Load File move it between machines.</li>
@@ -120,11 +127,37 @@
 
         <section id="shopScreen" class="screen shop-screen">
           <div class="menu-panel shop-panel">
-            <p class="eyebrow">Forest shop</p>
+            <p class="eyebrow">Soul armory</p>
             <h2>Spend your coins</h2>
             <div class="shop-wallet">Coins: <strong id="walletValue">0</strong></div>
             <div class="shop-grid" id="shopGrid"></div>
             <button id="shopBackBtn" class="secondary-btn wide" type="button">Back</button>
+          </div>
+        </section>
+
+        <section id="modeScreen" class="screen">
+          <div class="menu-panel compact mode-panel">
+            <p class="eyebrow">Choose path</p>
+            <h2>Enter the Dominion</h2>
+            <div class="mode-grid">
+              <button id="adventureBtn" class="mode-card" type="button">
+                <span>Adventure</span>
+                <strong>Begin at Gate 1</strong>
+              </button>
+              <button id="stageModeBtn" class="mode-card" type="button">
+                <span>Stage Mode</span>
+                <strong>Start from best gate</strong>
+              </button>
+              <button id="modeInventoryBtn" class="mode-card" type="button">
+                <span>Loadout</span>
+                <strong>Change weapons and souls</strong>
+              </button>
+              <button id="modeLeaderboardBtn" class="mode-card" type="button">
+                <span>Hall of Souls</span>
+                <strong>See named accomplishments</strong>
+              </button>
+            </div>
+            <button id="modeBackBtn" class="secondary-btn wide" type="button">Back</button>
           </div>
         </section>
 
@@ -159,8 +192,8 @@
 
         <section id="leaderboardScreen" class="screen">
           <div class="menu-panel compact">
-            <p class="eyebrow">Leaderboard</p>
-            <h2>Best runs</h2>
+            <p class="eyebrow">Accomplishments</p>
+            <h2>Hall of Souls</h2>
             <ol id="leaderboardList" class="leaderboard-list"></ol>
             <button id="leaderboardBackBtn" class="secondary-btn wide" type="button">Back</button>
           </div>
@@ -214,7 +247,7 @@
 
         <section id="creditsScreen" class="screen">
           <div class="menu-panel compact credits-panel">
-            <p class="eyebrow">The forest remembers</p>
+            <p class="eyebrow">The dominion remembers</p>
             <h2>You defeated No One</h2>
             <p class="summary">The empty throne tried to erase the arena. You answered louder.</p>
             <div class="credits-roll">
@@ -226,8 +259,10 @@
         </section>
       </section>
     </main>
-    <script src="scripts/content.js"></script>
-    <script src="scripts/save.js"></script>
-    <script src="scripts/game.js"></script>
+    <script src="scripts/content.js?v=2"></script>
+    <script src="scripts/save.js?v=2"></script>
+    <script src="scripts/input.js?v=2"></script>
+    <script src="scripts/audio.js?v=2"></script>
+    <script src="scripts/game.js?v=2"></script>
   </body>
 </html>
