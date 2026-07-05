@@ -128,20 +128,21 @@
       desc: "Coin magnet specialist with a greedy vacuum skill."
     },
     void: {
-      name: "Void",
-      cost: 7800,
+      name: "Void Limit",
+      cost: 8200,
       color: "void",
-      health: 1,
-      speed: 18,
-      magnet: 90,
-      attackSpeed: .82,
+      health: 2,
+      speed: 22,
+      magnet: 98,
+      attackSpeed: .78,
       void: true,
+      barrierMs: 4800,
       skills: [
-        { slot: 1, name: "Gravity Blue", cooldown: 9000, effect: "voidBlue", desc: "Pulls enemies into a blue singularity wave." },
-        { slot: 2, name: "Repulse Red", cooldown: 12000, effect: "voidRed", desc: "Repels everything in a violent red blast." },
-        { slot: 3, name: "Void Purple", cooldown: 26000, effect: "voidPurple", desc: "Blue and Red merge into a huge screen-cutting beam." }
+        { slot: 1, name: "Limit Blue", cooldown: 8200, effect: "voidBlue", desc: "Creates a blue singularity lane that drags enemies into the hit." },
+        { slot: 2, name: "Reversal Red", cooldown: 10800, effect: "voidRed", desc: "Explodes space outward, repelling enemies with a red blast." },
+        { slot: 3, name: "Void Purple", cooldown: 24000, effect: "voidPurple", desc: "Blue and Red collapse together into a wide erasing beam." }
       ],
-      desc: "Blindfolded reality breaker. Nah, I'd win."
+      desc: "Blindfolded spatial breaker with a short opening Infinity barrier. Nah, I'd win."
     },
     god: {
       name: "The Divine One",

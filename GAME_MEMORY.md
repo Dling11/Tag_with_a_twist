@@ -25,6 +25,8 @@ Use this file as the handoff note for future Codex conversations. If continuing 
 - Renamed the game from `Verdant Rush` to `Soul Dominion`; old `verdant-rush-save-v3` data is kept as a slot-1 migration fallback.
 - Added three named profile/save slots. Slot 1 defaults to `Rowell`; slots 2 and 3 default to `Player 2` and `Player 3`.
 - Added a title-screen profile selector, rename button, and a second `Enter the Dominion` mode screen with Adventure, Stage Mode, Loadout, and Hall of Souls.
+- Reworked the first-load UI so opening `index.html` shows a simple title screen with `Start Game`, active soul/profile slots, `Create Soul`, rename, sound, and save/load. Inventory/loadout/Hall are no longer primary first-screen buttons.
+- Reworked `Start Game` into a gate lobby: story stage cards for stages 1-9 and boss-only cards for stage 10 `No One` and stage 11 `The One Above`. Story cards start normal waves, while boss-only cards pass a `bossOnly` start flag and spawn the boss immediately.
 - Hall of Souls entries now store the profile/champion name, and victory prompts for a champion name.
 - Added stage HUD, boss bar, themed overlays, enemy variants, boss hazard telegraphs, and mobile layering fixes.
 - Added `GAME_MEMORY.md` as the project handoff file. Future chats should read it first.
@@ -33,7 +35,7 @@ Use this file as the handoff note for future Codex conversations. If continuing 
 - Increased weapon and character prices so unlocks feel more like prizes.
 - Added character skills on hotkeys `1`, `2`, `3`, and `4`, plus clickable/tappable skill HUD buttons.
 - Added Green, Red, Yellow, Cyan, Void, God, and starter Blue skill definitions.
-- Added original `Void` premium character with blindfold/cloak SVG art and gravity/repel/purple-collapse abilities.
+- Added original `Void Limit` premium character with blindfold/cloak SVG art, a 4.8-second opening Infinity barrier, stronger premium stats, and upgraded blue singularity / red reversal / purple erasure abilities.
 - Added custom God SVG art and five absurd premium God skills.
 - Added boss-clear celebration with portal/gate animation before stage clear.
 - Added lightweight generated WebAudio music loop plus stronger skill/ultimate/portal sound effects.
@@ -72,7 +74,7 @@ Use this file as the handoff note for future Codex conversations. If continuing 
 - `1`, `2`, `3`, `4`: character skills.
 - The Divine One uses `4` for `Reality Crack` and `5` for `Divine Overdrive`.
 - God and Void should remain expensive and intentionally broken.
-- Avoid direct anime copying; keep Void as an original blindfolded void mage.
+- Avoid direct anime copying; keep Void as an original blindfolded spatial mage. He should feel stylish and powerful, but below The Divine One.
 
 ## Good Next Ideas
 
@@ -93,11 +95,13 @@ Use this file as the handoff note for future Codex conversations. If continuing 
 - Serve locally for browser checks:
   - `npx.cmd -y http-server -p 5178 -a 127.0.0.1 .`
 - Verify:
-  - start menu opens
+  - start menu opens as the simplified title screen with `Start Game`, profile slots, and `Create Soul`
+  - Start Game opens the gate lobby with story stage cards and boss-only cards
+  - story stage cards start normal stages; boss-only stage 10 starts directly at `No One`; boss-only stage 11 starts directly at `The One Above`
   - shop opens
   - inventory/loadout opens
   - profile slots switch active saves and rename works
-  - Start Game opens the mode screen
+  - gate lobby Loadout and Hall of Souls buttons return correctly
   - Adventure starts at stage 1
   - Return Gate starts from the best cleared/unlocked stage and does not skip No One just because stage 11 was attempted
   - sound button toggles

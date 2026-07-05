@@ -39,7 +39,11 @@
   const nextStagePreview = $("nextStagePreview");
   const nextBossPreview = $("nextBossPreview");
   const activeProfileValue = $("activeProfileValue");
+  const modeProfileValue = $("modeProfileValue");
+  const modeCoinsValue = $("modeCoinsValue");
   const profileSlots = $("profileSlots");
+  const stageSelectGrid = $("stageSelectGrid");
+  const bossSelectGrid = $("bossSelectGrid");
   const equippedWeaponValue = $("equippedWeaponValue");
   const equippedCharacterValue = $("equippedCharacterValue");
   const loadoutWeaponValue = $("loadoutWeaponValue");
@@ -72,12 +76,10 @@
     start: $("startBtn"),
     instructions: $("instructionsBtn"),
     back: $("backBtn"),
-    shop: $("shopBtn"),
-    inventory: $("inventoryBtn"),
     inventoryBack: $("inventoryBackBtn"),
     shopBack: $("shopBackBtn"),
-    leaderboard: $("leaderboardBtn"),
     leaderboardBack: $("leaderboardBackBtn"),
+    createProfile: $("createProfileBtn"),
     renameProfile: $("renameProfileBtn"),
     adventure: $("adventureBtn"),
     stageMode: $("stageModeBtn"),
@@ -137,6 +139,7 @@
     renderedSkillSignature: "",
     divineOverdriveUntil: 0,
     nextDivineBeamAt: 0,
+    voidBarrierUntil: 0,
     lastBlinkAt: 0,
     deathTaunt: "",
     cage: null,
@@ -181,6 +184,7 @@
     renderLoadout();
     renderLeaderboard();
     renderProfiles();
+    renderStageSelect();
     updateHud();
     updateStartPreview();
     updateEquippedSummary();
@@ -194,19 +198,18 @@
     window.addEventListener("resize", resize);
     window.addEventListener("keydown", handleKeyDown);
     window.addEventListener("keyup", (event) => keys.delete(event.key.toLowerCase()));
-    buttons.start.addEventListener("click", () => { playSound("click"); showScreen("mode"); });
+    buttons.start.addEventListener("click", () => { playSound("click"); renderStageSelect(); showScreen("mode"); });
     buttons.adventure.addEventListener("click", () => { playSound("click"); startRun(1); });
-    buttons.stageMode.addEventListener("click", () => { playSound("click"); startRun(Math.min(gameTuning.maxStage, state.save.bestStage || 1)); });
+    buttons.stageMode.addEventListener("click", () => { playSound("click"); startRun(getBestReturnStage()); });
     buttons.modeInventory.addEventListener("click", () => openInventory("mode"));
     buttons.modeLeaderboard.addEventListener("click", () => openLeaderboard("mode"));
     buttons.modeBack.addEventListener("click", () => { playSound("click"); showScreen("start"); });
     buttons.instructions.addEventListener("click", () => { playSound("click"); showScreen("instructions"); });
     buttons.back.addEventListener("click", () => { playSound("click"); showScreen("start"); });
-    buttons.inventory.addEventListener("click", () => openInventory("start"));
     buttons.inventoryBack.addEventListener("click", () => closeInventory());
     buttons.shopBack.addEventListener("click", () => closeShop());
-    buttons.leaderboard.addEventListener("click", () => openLeaderboard("start"));
     buttons.leaderboardBack.addEventListener("click", () => { playSound("click"); showScreen(state.leaderboardReturn === "mode" ? "mode" : "start"); });
+    buttons.createProfile.addEventListener("click", createProfile);
     buttons.renameProfile.addEventListener("click", renameActiveProfile);
     buttons.settings.addEventListener("click", toggleSound);
     buttons.settingsPause.addEventListener("click", toggleSound);
@@ -314,14 +317,14 @@
     });
   }
 
-  function startRun(stage) {
+  function startRun(stage, options = {}) {
     state.runCoins = 0;
     state.bankedThisRun = 0;
     startMusic();
-    startStage(stage);
+    startStage(stage, options);
   }
 
-  function startStage(stage) {
+  function startStage(stage, options = {}) {
     state.arenaScale = 1;
     gameWrap.classList.remove("one-above-arena");
     resize();
@@ -355,6 +358,7 @@
     state.skillCooldowns = {};
     state.divineOverdriveUntil = 0;
     state.nextDivineBeamAt = 0;
+    state.voidBarrierUntil = 0;
     state.lastBlinkAt = 0;
     state.deathTaunt = "";
     state.cage = null;
@@ -373,13 +377,17 @@
     state.player.vy = 0;
     updatePlayerSkin();
     renderSkillHud(true);
-    playerEl.classList.remove("invincible", "boosted", "shielded", "low-health", "divine-overdrive");
+    playerEl.classList.remove("invincible", "boosted", "shielded", "low-health", "divine-overdrive", "void-barrier");
     nightOverlay.classList.remove("active");
     bossBar.classList.remove("active");
     applyStageTheme(stageInfo);
     updateHud();
     showScreen(null);
-    if (stageInfo.superboss) {
+    if (character.void) {
+      activateVoidBarrier(character.barrierMs || 4800, "INFINITY");
+      createScreenEffect("void-blue compact", "INFINITY");
+    }
+    if (options.bossOnly || stageInfo.superboss) {
       spawnBoss();
     } else {
       spawnEnemy();
@@ -643,6 +651,14 @@
     createShockwave(state.player.x, state.player.y, 580, "god", "BLUE-GOLD AURA");
   }
 
+  function activateVoidBarrier(duration = 4800, label = "INFINITY") {
+    const now = performance.now();
+    state.voidBarrierUntil = Math.max(state.voidBarrierUntil || 0, now + duration);
+    playerEl.classList.add("void-barrier");
+    createShockwave(state.player.x, state.player.y, 360, "void-blue void-barrier-wave", label);
+    burst(state.player.x, state.player.y, 36, ["#ffffff", "#65e5ff", "#8d59ff", "#111827"]);
+  }
+
   function updateDivineOverdrive() {
     const now = performance.now();
     const active = now < state.divineOverdriveUntil;
@@ -758,26 +774,44 @@
       playSound("coin");
     } else if (effect === "voidBlue") {
       const point = {
-        x: clamp(state.player.x + aim.x * 170, 80, state.width - 80),
-        y: clamp(state.player.y + aim.y * 170, 130, state.height - 80)
+        x: clamp(state.player.x + aim.x * 230, 80, state.width - 80),
+        y: clamp(state.player.y + aim.y * 230, 130, state.height - 80)
       };
-      createBeam("void-blue", aim, 560, 150, 520, "GRAVITY BLUE");
-      pullEnemies(point.x, point.y, 520, 260, 110);
-      damageEnemiesInBeam(aim, 560, 160, 86, 120);
-      createShockwave(point.x, point.y, 260, "void-blue", "BLUE");
+      createScreenEffect("void-blue compact", "LIMIT BLUE");
+      activateVoidBarrier(900, "");
+      createBeam("void-blue void-lapse", aim, 760, 190, 680, "BLUE");
+      pullEnemies(point.x, point.y, 660, 340, 130);
+      damageEnemiesInBeam(aim, 760, 205, 120, 180);
+      createShockwave(point.x, point.y, 320, "void-blue void-lapse", "BLUE");
+      queueTimer(() => createShockwave(point.x, point.y, 420, "void-blue void-lapse", ""), 140);
       playSound("skill");
     } else if (effect === "voidRed") {
-      createShockwave(state.player.x, state.player.y, 430, "void-red", "REPULSE RED");
-      pushEnemies(state.player.x, state.player.y, 430, 310, 150);
-      damageEnemiesInRadius(state.player.x, state.player.y, 410, 135, 210);
+      createScreenEffect("void-red compact", "REVERSAL RED");
+      createBeam("void-red void-reversal", aim, 540, 176, 520, "RED");
+      createShockwave(state.player.x, state.player.y, 560, "void-red void-reversal", "RED");
+      pushEnemies(state.player.x, state.player.y, 560, 430, 195);
+      damageEnemiesInRadius(state.player.x, state.player.y, 540, 170, 270);
       shake();
+      queueTimer(() => shake(), 180);
       playSound("skill");
     } else if (effect === "voidPurple") {
       createScreenEffect("void-purple", "VOID PURPLE");
-      createBeam("void-purple", aim, Math.max(state.width, state.height) * 1.35, 230, 1100, "VOID PURPLE");
-      damageEnemiesInBeam(aim, Math.max(state.width, state.height) * 1.35, 250, 520, 720);
+      const side = { x: -aim.y, y: aim.x };
+      const bluePoint = { x: state.player.x + side.x * 74, y: state.player.y + side.y * 74 };
+      const redPoint = { x: state.player.x - side.x * 74, y: state.player.y - side.y * 74 };
+      createShockwave(bluePoint.x, bluePoint.y, 310, "void-blue void-lapse", "BLUE");
+      createShockwave(redPoint.x, redPoint.y, 310, "void-red void-reversal", "RED");
+      pullEnemies(state.player.x, state.player.y, 520, 170, 0);
       shake();
-      queueTimer(() => shake(), 260);
+      queueTimer(() => {
+        const length = Math.max(state.width, state.height) * 1.55;
+        createBeam("void-purple void-erasure", aim, length, 310, 1280, "VOID PURPLE");
+        damageEnemiesInBeam(aim, length, 340, 640, 980);
+        damageEnemiesInRadius(state.player.x, state.player.y, 390, 160, 260);
+        createShockwave(state.player.x, state.player.y, 760, "void-purple void-erasure", "PURPLE");
+        shake();
+      }, 260);
+      queueTimer(() => shake(), 520);
       playSound("ultimate");
     } else if (effect === "godShockwave") {
       createScreenEffect("god-flash compact", "DIVINE PULSE");
@@ -1825,6 +1859,14 @@
   function damagePlayer(amount = 1, options = {}) {
     const now = performance.now();
     const character = getCharacter();
+    if (!options.ignoreDivine && character.void && now < state.voidBarrierUntil) {
+      if (now >= state.invincibleUntil) {
+        state.invincibleUntil = now + 320;
+        floatText("INFINITY", state.player.x, state.player.y - 44);
+        createShockwave(state.player.x, state.player.y, 210, "void-blue void-barrier-wave", "");
+      }
+      return;
+    }
     if (!options.ignoreDivine && character.god && state.stage < gameTuning.maxStage) {
       if (now >= state.invincibleUntil) {
         state.invincibleUntil = now + 650;
@@ -2063,6 +2105,7 @@
     state.save.bestStage = Math.max(state.save.bestStage, state.stage);
     updateStartPreview();
     renderProfiles();
+    renderStageSelect();
   }
 
   function addLeaderboard(won) {
@@ -2119,6 +2162,7 @@
     const profiles = saveStore.getProfileSummaries();
     profileSlots.replaceChildren();
     if (activeProfileValue) activeProfileValue.textContent = state.save.profileName || "Unknown Soul";
+    if (modeProfileValue) modeProfileValue.textContent = state.save.profileName || "Unknown Soul";
     for (const profile of profiles) {
       const button = document.createElement("button");
       button.className = `profile-slot${profile.slot === state.save.profileSlot ? " active" : ""}`;
@@ -2138,6 +2182,30 @@
     persistSave();
     state.save = saveStore.loadSave(slot);
     playSound("click");
+    refreshForSaveChange();
+    showScreen("start");
+  }
+
+  function createProfile() {
+    const profiles = saveStore.getProfileSummaries();
+    const target = profiles.find((profile) => profile.slot !== state.save.profileSlot && profile.coins === 0 && profile.bestStage <= 1)
+      || profiles.find((profile) => profile.slot !== state.save.profileSlot)
+      || profiles[0];
+    if (!target) return;
+    if (target.coins > 0 || target.bestStage > 1) {
+      const replace = window.confirm(`Create a new soul in Slot ${target.slot}? This replaces ${target.profileName}.`);
+      if (!replace) return;
+    }
+    const name = window.prompt("Name this new soul:", target.slot === 1 ? "Rowell" : `Player ${target.slot}`);
+    if (name === null) return;
+    persistSave();
+    const fresh = saveStore.normalizeSave({
+      ...defaultSave(),
+      profileSlot: target.slot,
+      profileName: name
+    }, target.slot);
+    state.save = fresh;
+    playSound("power");
     refreshForSaveChange();
     showScreen("start");
   }
@@ -2166,6 +2234,7 @@
     renderLoadout();
     renderLeaderboard();
     renderProfiles();
+    renderStageSelect();
     updatePlayerSkin();
     updateHud();
     updateStartPreview();
@@ -2173,6 +2242,44 @@
     updateSettingsButtons();
     renderSkillHud(true);
     persistSave();
+  }
+
+  function renderStageSelect() {
+    if (!stageSelectGrid || !bossSelectGrid) return;
+    stageSelectGrid.replaceChildren();
+    bossSelectGrid.replaceChildren();
+    stageCatalog
+      .filter((stageInfo) => stageInfo.id < 10)
+      .forEach((stageInfo) => stageSelectGrid.appendChild(createGateCard(stageInfo, false)));
+    stageCatalog
+      .filter((stageInfo) => stageInfo.id >= 10)
+      .forEach((stageInfo) => bossSelectGrid.appendChild(createGateCard(stageInfo, true)));
+    if (modeCoinsValue) modeCoinsValue.textContent = state.save.coins;
+    if (modeProfileValue) modeProfileValue.textContent = state.save.profileName || "Unknown Soul";
+  }
+
+  function createGateCard(stageInfo, bossOnly) {
+    const button = document.createElement("button");
+    const reached = stageInfo.id <= getBestReturnStage();
+    const next = stageInfo.id === Math.min(gameTuning.maxStage, getBestReturnStage() + 1);
+    button.className = `stage-card theme-${stageInfo.theme}${bossOnly ? " boss-card" : ""}${stageInfo.superboss ? " superboss-card" : ""}`;
+    button.type = "button";
+    button.innerHTML = `
+      <span class="stage-number">${bossOnly ? "Boss" : `Stage ${stageInfo.id}`}</span>
+      <strong>${stageInfo.name}</strong>
+      <em>${stageInfo.bossName} - ${stageInfo.bossTitle}</em>
+      <small>${bossOnly ? "Boss-only duel" : `${stageInfo.killGoal} kills before boss`} · ${stageInfo.reward} coin reward</small>
+      <i>${reached ? "Reached" : next ? "Next" : "Open Trial"}</i>
+    `;
+    button.addEventListener("click", () => {
+      playSound("click");
+      startRun(stageInfo.id, { bossOnly });
+    });
+    return button;
+  }
+
+  function getBestReturnStage() {
+    return Math.max(1, Math.min(gameTuning.maxStage, Number(state.save.bestStage) || 1));
   }
 
   function renderShop() {
@@ -2331,6 +2438,8 @@
     const character = getCharacter();
     if (equippedWeaponValue) equippedWeaponValue.textContent = `${weapon.name} Lv ${weapon.level || 1}`;
     if (equippedCharacterValue) equippedCharacterValue.textContent = character.name;
+    if (modeCoinsValue) modeCoinsValue.textContent = state.save.coins;
+    if (modeProfileValue) modeProfileValue.textContent = state.save.profileName || "Unknown Soul";
     if (loadoutWeaponValue) loadoutWeaponValue.textContent = `${weapon.name} Lv ${weapon.level || 1}`;
     if (loadoutCharacterValue) loadoutCharacterValue.textContent = character.name;
     if (loadoutWalletValue) loadoutWalletValue.textContent = state.save.coins;
@@ -2543,13 +2652,16 @@
   function updatePowerClasses() {
     playerEl.classList.toggle("boosted", getPowerTimeLeft("boost") > 0 || performance.now() < state.rageUntil);
     playerEl.classList.toggle("shielded", getPowerTimeLeft("shield") > 0 || state.shieldCharges > 0);
+    playerEl.classList.toggle("void-barrier", performance.now() < state.voidBarrierUntil);
   }
 
   function renderPowerStatus(force = false) {
+    const now = performance.now();
     const active = Object.keys(powerDefinitions)
       .map((type) => ({ type, left: getPowerTimeLeft(type) }))
       .filter((power) => power.left > 0);
-    if (performance.now() < state.rageUntil) active.push({ type: "boost", left: state.rageUntil - performance.now() });
+    if (now < state.rageUntil) active.push({ type: "boost", left: state.rageUntil - now });
+    if (now < state.voidBarrierUntil) active.push({ type: "void", left: state.voidBarrierUntil - now });
     const signature = active.map((power) => `${power.type}:${Math.ceil(power.left / 1000)}`).join("|");
     if (!force && signature === state.renderedPowers) return;
     state.renderedPowers = signature;
@@ -2636,6 +2748,7 @@
     releaseCage();
     state.divineOverdriveUntil = 0;
     state.nextDivineBeamAt = 0;
+    state.voidBarrierUntil = 0;
     state.lastBlinkAt = 0;
     state.screenEffectUntil = 0;
     enemyLayer.replaceChildren();
@@ -2644,7 +2757,7 @@
     gameWrap.querySelectorAll(".boss-dialogue").forEach((item) => item.remove());
     gameWrap.querySelectorAll(".prime-warning").forEach((item) => item.remove());
     powerStatus.replaceChildren();
-    playerEl.classList.remove("boosted", "shielded", "low-health", "invincible", "divine-overdrive");
+    playerEl.classList.remove("boosted", "shielded", "low-health", "invincible", "divine-overdrive", "void-barrier");
     gameWrap.classList.remove("one-above-arena", "one-above-wrath");
     nightOverlay.classList.remove("active");
   }
@@ -2726,6 +2839,8 @@
     const previewStage = getStageInfo(Math.min(state.save.bestStage || 1, gameTuning.maxStage));
     if (nextStagePreview) nextStagePreview.textContent = previewStage.name;
     if (nextBossPreview) nextBossPreview.textContent = previewStage.bossName;
+    if (modeCoinsValue) modeCoinsValue.textContent = state.save.coins;
+    if (modeProfileValue) modeProfileValue.textContent = state.save.profileName || "Unknown Soul";
   }
 
   function persistSave() {
