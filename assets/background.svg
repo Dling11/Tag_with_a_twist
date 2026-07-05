@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#87d87b"/>
+      <stop offset=".48" stop-color="#5abf68"/>
+      <stop offset="1" stop-color="#2c9456"/>
+    </linearGradient>
+    <pattern id="grass" width="52" height="52" patternUnits="userSpaceOnUse">
+      <path d="M8 35c9-9 20-9 33 0M14 14c8 5 16 5 24 0M40 47c3-5 6-8 10-10" fill="none" stroke="#b9f29a" stroke-width="2" opacity=".18" stroke-linecap="round"/>
+      <path d="M4 7c5 2 10 2 15 0M29 26c5-4 10-5 17-1" fill="none" stroke="#1c7345" stroke-width="2" opacity=".12" stroke-linecap="round"/>
+    </pattern>
+  </defs>
+  <rect width="1200" height="800" fill="url(#bg)"/>
+  <rect width="1200" height="800" fill="url(#grass)"/>
+  <path d="M-80 650C160 560 287 728 500 620c220-111 360-88 780 9v250H-80Z" fill="#227b4b" opacity=".2"/>
+  <path d="M-50 120c185 80 337-67 520 26 189 96 419 38 780-55" fill="none" stroke="#d5ffb2" stroke-width="72" opacity=".08"/>
+</svg>

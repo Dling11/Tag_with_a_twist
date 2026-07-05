@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" style="display:none">
+  <symbol id="play" viewBox="0 0 24 24"><path d="M8 5v14l11-7Z" fill="currentColor"/></symbol>
+  <symbol id="pause" viewBox="0 0 24 24"><path d="M7 5h4v14H7Zm6 0h4v14h-4Z" fill="currentColor"/></symbol>
+  <symbol id="restart" viewBox="0 0 24 24"><path d="M6.3 7.8A8 8 0 1 1 4 13h2.4A5.6 5.6 0 1 0 8 9.4V13H5V5h8v3Z" fill="currentColor"/></symbol>
+  <symbol id="heart" viewBox="0 0 24 24"><path d="M12 21S4 16.3 4 9.8A4.8 4.8 0 0 1 12 6a4.8 4.8 0 0 1 8 3.8C20 16.3 12 21 12 21Z" fill="currentColor"/></symbol>
+  <symbol id="coin" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" fill="currentColor"/><path d="M12 7v10M8.5 10c1.2-2 5.8-2 7 0-1.2 2-5.8 2-7 0Zm0 4c1.2 2 5.8 2 7 0-1.2-2-5.8-2-7 0Z" stroke="#7a4a09" stroke-width="1.5" fill="none" stroke-linecap="round"/></symbol>
+  <symbol id="bolt" viewBox="0 0 24 24"><path d="m13 2-8 12h6l-1 8 9-13h-6Z" fill="currentColor"/></symbol>
+</svg>

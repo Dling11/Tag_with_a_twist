@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96">
+  <defs>
+    <radialGradient id="ghost" cx="40%" cy="24%" r="76%">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset=".5" stop-color="#cbe7ff"/>
+      <stop offset="1" stop-color="#7a9bd6"/>
+    </radialGradient>
+    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feDropShadow dx="0" dy="0" stdDeviation="7" flood-color="#b6e6ff" flood-opacity=".75"/>
+    </filter>
+  </defs>
+  <ellipse cx="48" cy="84" rx="24" ry="7" fill="#183356" opacity=".18"/>
+  <path filter="url(#glow)" d="M18 76V40c0-19 13-32 30-32s30 13 30 32v36c0 8-8 11-14 5l-4-4-6 6-6-6-6 6-6-6-4 4c-6 6-14 3-14-5Z" fill="url(#ghost)" opacity=".92"/>
+  <circle cx="36" cy="42" r="5" fill="#25436b"/>
+  <circle cx="60" cy="42" r="5" fill="#25436b"/>
+  <path d="M36 60c7 4 17 4 24 0" fill="none" stroke="#25436b" stroke-width="5" stroke-linecap="round"/>
+  <path d="M24 31c5-10 14-15 26-16" fill="none" stroke="#fff" stroke-width="6" stroke-linecap="round" opacity=".55"/>
+</svg>
