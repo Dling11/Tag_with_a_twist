@@ -4,7 +4,8 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Verdant Rush</title>
-    <link rel="stylesheet" href="style.css">
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='28' fill='%231fc4d6'/%3E%3Cpath d='M18 36c7 8 21 8 28 0' stroke='%2316322e' stroke-width='5' fill='none' stroke-linecap='round'/%3E%3Ccircle cx='23' cy='25' r='4' fill='%2316322e'/%3E%3Ccircle cx='41' cy='25' r='4' fill='%2316322e'/%3E%3C/svg%3E">
+    <link rel="stylesheet" href="style.css?v=3">
   </head>
   <body>
     <main id="app" class="app">
@@ -23,6 +24,10 @@
             <span class="hud-label">Stage</span>
             <strong id="stageValue">1-1</strong>
           </div>
+          <div class="hud-card area-card">
+            <span class="hud-label">Area</span>
+            <strong id="areaValue">Bramble</strong>
+          </div>
           <div class="hud-card">
             <span class="hud-label">Coins</span>
             <strong id="scoreValue">0</strong>
@@ -37,35 +42,49 @@
           </div>
           <div class="hud-card hearts" id="hearts" aria-label="Health"></div>
           <div id="powerStatus" class="power-status" aria-label="Active powers"></div>
+          <div id="weaponStatus" class="weapon-status" aria-label="Equipped weapon"></div>
           <button id="pauseBtn" class="icon-btn" type="button" aria-label="Pause game" title="Pause">
             <span class="pause-bars"></span>
           </button>
         </header>
+        <div id="skillHud" class="skill-hud" aria-label="Character skills"></div>
         <div id="bossBar" class="boss-bar">
           <span id="bossName">Boss</span>
           <div><i id="bossFill"></i></div>
         </div>
 
         <div id="damageVignette" class="damage-vignette"></div>
+        <div id="touchControls" class="touch-controls" aria-hidden="true">
+          <div id="joystick" class="joystick">
+            <span id="stick" class="stick"></span>
+          </div>
+          <button id="touchAttackBtn" class="touch-attack" type="button" aria-label="Attack"></button>
+        </div>
 
         <section id="startScreen" class="screen active">
           <div class="menu-panel">
             <p class="eyebrow">Stage action survival</p>
             <h1>Verdant Rush</h1>
-            <p class="summary">Fight through 10 stages, buy weapons, unlock characters, and defeat the boss named No One.</p>
-            <div class="difficulty" role="group" aria-label="Difficulty selection">
-              <button class="difficulty-btn active" type="button" data-difficulty="easy">
-                <strong>Calm</strong>
-                <span>Forgiving pace</span>
-              </button>
-              <button class="difficulty-btn" type="button" data-difficulty="normal">
-                <strong>Wild</strong>
-                <span>Balanced run</span>
-              </button>
-              <button class="difficulty-btn" type="button" data-difficulty="hard">
-                <strong>Feral</strong>
-                <span>Fast and dense</span>
-              </button>
+            <p class="summary">Fight through 10 handcrafted stages, unlock stronger builds, and challenge the empty throne named No One.</p>
+            <div class="run-card">
+              <div>
+                <span>Best reached</span>
+                <strong id="nextStagePreview">Bramble Gate</strong>
+              </div>
+              <div>
+                <span>Boss</span>
+                <strong id="nextBossPreview">Rootjaw</strong>
+              </div>
+            </div>
+            <div class="equipped-strip">
+              <div>
+                <span>Weapon</span>
+                <strong id="equippedWeaponValue">Palm Strike</strong>
+              </div>
+              <div>
+                <span>Character</span>
+                <strong id="equippedCharacterValue">Blue</strong>
+              </div>
             </div>
             <div class="menu-actions">
               <button id="startBtn" class="primary-btn" type="button"><span>Start Run</span></button>
@@ -73,7 +92,9 @@
             </div>
             <div class="menu-actions thin">
               <button id="shopBtn" class="secondary-btn" type="button">Shop</button>
+              <button id="inventoryBtn" class="secondary-btn" type="button">Inventory</button>
               <button id="leaderboardBtn" class="secondary-btn" type="button">Leaderboard</button>
+              <button id="settingsBtn" class="secondary-btn" type="button">Sound On</button>
               <button id="saveBtn" class="secondary-btn" type="button">Save File</button>
               <button id="loadBtn" class="secondary-btn" type="button">Load File</button>
               <input id="saveInput" type="file" accept="application/json,.json" hidden>
@@ -88,9 +109,10 @@
             <ul class="instructions">
               <li>Use <strong>WASD</strong> or <strong>Arrow Keys</strong> to move.</li>
               <li>Press <strong>Space</strong> or <strong>J</strong> to attack.</li>
+              <li>Press <strong>1</strong>, <strong>2</strong>, <strong>3</strong>, and <strong>4</strong> for character skills.</li>
               <li>Defeat enough enemies to summon each stage boss.</li>
               <li>Open the shop between stages to buy weapons and characters.</li>
-              <li>Use Save File and Load File as the no-server database substitute.</li>
+              <li>Your progress autosaves in this browser. Save File and Load File move it between machines.</li>
             </ul>
             <button id="backBtn" class="secondary-btn wide" type="button">Back</button>
           </div>
@@ -106,6 +128,35 @@
           </div>
         </section>
 
+        <section id="inventoryScreen" class="screen shop-screen">
+          <div class="menu-panel shop-panel inventory-panel">
+            <p class="eyebrow">Loadout</p>
+            <h2>Choose your chaos</h2>
+            <div class="loadout-summary">
+              <div>
+                <span>Weapon</span>
+                <strong id="loadoutWeaponValue">Palm Strike</strong>
+              </div>
+              <div>
+                <span>Character</span>
+                <strong id="loadoutCharacterValue">Blue</strong>
+              </div>
+              <div>
+                <span>Coins</span>
+                <strong id="loadoutWalletValue">0</strong>
+              </div>
+            </div>
+            <div class="loadout-tabs">
+              <button class="loadout-tab active" type="button" data-loadout-tab="weapons">Weapons</button>
+              <button class="loadout-tab" type="button" data-loadout-tab="characters">Characters</button>
+            </div>
+            <div id="weaponLoadoutGrid" class="shop-grid loadout-grid"></div>
+            <div id="characterLoadoutGrid" class="shop-grid loadout-grid hidden"></div>
+            <aside id="skillDetails" class="skill-details"></aside>
+            <button id="inventoryBackBtn" class="secondary-btn wide" type="button">Back</button>
+          </div>
+        </section>
+
         <section id="leaderboardScreen" class="screen">
           <div class="menu-panel compact">
             <p class="eyebrow">Leaderboard</p>
@@ -117,12 +168,16 @@
 
         <section id="stageClearScreen" class="screen">
           <div class="menu-panel compact">
-            <p class="eyebrow">Stage clear</p>
+            <p class="eyebrow">Gate opened</p>
             <h2 id="stageClearTitle">Level 1 cleared</h2>
             <p class="summary" id="stageClearText">The path opens deeper into the forest.</p>
+            <div class="portal-preview">
+              <span></span>
+            </div>
             <div class="menu-actions stacked">
-              <button id="nextStageBtn" class="primary-btn" type="button">Next Stage</button>
+              <button id="nextStageBtn" class="primary-btn" type="button">Enter Portal</button>
               <button id="shopStageBtn" class="secondary-btn" type="button">Shop</button>
+              <button id="inventoryStageBtn" class="secondary-btn" type="button">Inventory</button>
               <button id="menuStageBtn" class="ghost-btn" type="button">Main Menu</button>
             </div>
           </div>
@@ -135,6 +190,7 @@
             <div class="menu-actions stacked">
               <button id="resumeBtn" class="primary-btn" type="button">Resume</button>
               <button id="restartPauseBtn" class="secondary-btn" type="button">Restart</button>
+              <button id="settingsPauseBtn" class="secondary-btn" type="button">Sound On</button>
               <button id="menuPauseBtn" class="ghost-btn" type="button">Main Menu</button>
             </div>
           </div>
@@ -160,17 +216,18 @@
           <div class="menu-panel compact credits-panel">
             <p class="eyebrow">The forest remembers</p>
             <h2>You defeated No One</h2>
-            <p class="summary">The final boss had no name because it was every bad decision chasing you at once. You still won.</p>
+            <p class="summary">The empty throne tried to erase the arena. You answered louder.</p>
             <div class="credits-roll">
-              <span>Design: You and Codex</span>
-              <span>Final Boss: No One</span>
-              <span>Reward: bragging rights and very broken shop builds</span>
+              <span>Final Boss: No One, Heavenless Monarch</span>
+              <span>Reward: bragging rights and very broken builds</span>
             </div>
             <button id="creditsMenuBtn" class="primary-btn wide" type="button">Main Menu</button>
           </div>
         </section>
       </section>
     </main>
-    <script src="script.js"></script>
+    <script src="scripts/content.js"></script>
+    <script src="scripts/save.js"></script>
+    <script src="scripts/game.js"></script>
   </body>
 </html>
