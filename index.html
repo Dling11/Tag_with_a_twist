@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Soul Dominion</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='28' fill='%231fc4d6'/%3E%3Cpath d='M18 36c7 8 21 8 28 0' stroke='%2316322e' stroke-width='5' fill='none' stroke-linecap='round'/%3E%3Ccircle cx='23' cy='25' r='4' fill='%2316322e'/%3E%3Ccircle cx='41' cy='25' r='4' fill='%2316322e'/%3E%3C/svg%3E">
-    <link rel="stylesheet" href="style.css?v=14">
+    <link rel="stylesheet" href="style.css?v=19">
   </head>
   <body>
     <main id="app" class="app">
@@ -15,7 +15,7 @@
           <div id="pickupLayer" class="layer pickup-layer"></div>
           <div id="enemyLayer" class="layer enemy-layer"></div>
           <div id="effectLayer" class="layer effect-layer"></div>
-          <div id="player" class="player entity" aria-hidden="true"></div>
+          <div id="player" class="player entity" aria-hidden="true"><span class="equipped-wings"></span></div>
         </div>
         <div id="nightOverlay" class="night-overlay"></div>
 
@@ -43,11 +43,13 @@
           <div class="hud-card hearts" id="hearts" aria-label="Health"></div>
           <div id="powerStatus" class="power-status" aria-label="Active powers"></div>
           <div id="weaponStatus" class="weapon-status" aria-label="Equipped weapon"></div>
+          <div id="wingStatus" class="wing-status hidden" aria-label="Equipped wings"></div>
           <button id="pauseBtn" class="icon-btn" type="button" aria-label="Pause game" title="Pause">
             <span class="pause-bars"></span>
           </button>
         </header>
         <div id="skillHud" class="skill-hud" aria-label="Character skills"></div>
+        <div id="domainMeter" class="domain-meter hidden" aria-label="Void domain meter"></div>
         <div id="bossBar" class="boss-bar">
           <span id="bossName">Boss</span>
           <div><i id="bossFill"></i></div>
@@ -141,6 +143,10 @@
                 <strong id="equippedCharacterValue">Blue</strong>
               </div>
               <div>
+                <span>Wings</span>
+                <strong id="equippedWingsValue">None</strong>
+              </div>
+              <div>
                 <span>Coins</span>
                 <strong id="modeCoinsValue">0</strong>
               </div>
@@ -194,22 +200,29 @@
                 <span>Coins</span>
                 <strong id="loadoutWalletValue">0</strong>
               </div>
+              <div>
+                <span>Wings</span>
+                <strong id="loadoutWingsValue">None</strong>
+              </div>
             </div>
             <div class="loadout-tabs">
               <button class="loadout-tab active" type="button" data-loadout-tab="weapons">Weapons</button>
               <button class="loadout-tab" type="button" data-loadout-tab="characters">Characters</button>
+              <button class="loadout-tab" type="button" data-loadout-tab="wings">Wings</button>
             </div>
             <div id="weaponLoadoutGrid" class="shop-grid loadout-grid"></div>
             <div id="characterLoadoutGrid" class="shop-grid loadout-grid hidden"></div>
+            <div id="wingsLoadoutGrid" class="shop-grid loadout-grid hidden"></div>
             <aside id="skillDetails" class="skill-details"></aside>
             <button id="inventoryBackBtn" class="secondary-btn wide" type="button">Back</button>
           </div>
         </section>
 
         <section id="leaderboardScreen" class="screen">
-          <div class="menu-panel compact">
+          <div class="menu-panel compact hall-panel">
             <p class="eyebrow">Accomplishments</p>
             <h2>Hall of Souls</h2>
+            <div id="leaderboardStats" class="hall-stats"></div>
             <ol id="leaderboardList" class="leaderboard-list"></ol>
             <button id="leaderboardBackBtn" class="secondary-btn wide" type="button">Back</button>
           </div>
@@ -268,17 +281,17 @@
             <p class="summary">The architect of reality called you insignificant. The Hall of Souls disagreed.</p>
             <div class="credits-roll">
               <span>Final Boss: The One Above</span>
-              <span>Reward: bragging rights and very broken builds</span>
+              <span id="creditsRewardText">Reward: bragging rights and very broken builds</span>
             </div>
             <button id="creditsMenuBtn" class="primary-btn wide" type="button">Main Menu</button>
           </div>
         </section>
       </section>
     </main>
-    <script src="scripts/content.js?v=3"></script>
-    <script src="scripts/save.js?v=2"></script>
+    <script src="scripts/content.js?v=6"></script>
+    <script src="scripts/save.js?v=3"></script>
     <script src="scripts/input.js?v=2"></script>
-    <script src="scripts/audio.js?v=2"></script>
-    <script src="scripts/game.js?v=5"></script>
+    <script src="scripts/audio.js?v=3"></script>
+    <script src="scripts/game.js?v=10"></script>
   </body>
 </html>

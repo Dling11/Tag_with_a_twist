@@ -60,6 +60,33 @@
     }
   };
 
+  const wings = {
+    none: {
+      name: "No Wings",
+      cost: 0,
+      icon: "none",
+      speed: 0,
+      magnet: 0,
+      health: 0,
+      desc: "No wing relic equipped."
+    },
+    seraph: {
+      name: "Seraph Dominion Wings",
+      cost: 0,
+      icon: "seraph",
+      rewardOnly: true,
+      speed: 18,
+      magnet: 28,
+      health: 1,
+      reviveCooldown: 90000,
+      reviveImmunityMs: 3200,
+      reviveBoostMs: 8000,
+      reviveHealRatio: 1,
+      heartCount: 4,
+      desc: "Reward from defeating The One Above. Grants a final miracle revive, temporary immunity, speed, shield, and falling hearts."
+    }
+  };
+
   const characters = {
     blue: {
       name: "Blue",
@@ -137,12 +164,16 @@
       attackSpeed: .78,
       void: true,
       barrierMs: 4800,
+      regenMs: 6200,
+      domainDuration: 14000,
       skills: [
         { slot: 1, name: "Limit Blue", cooldown: 8200, effect: "voidBlue", desc: "Creates a blue singularity lane that drags enemies into the hit." },
         { slot: 2, name: "Reversal Red", cooldown: 10800, effect: "voidRed", desc: "Explodes space outward, repelling enemies with a red blast." },
-        { slot: 3, name: "Void Purple", cooldown: 24000, effect: "voidPurple", desc: "Blue and Red collapse together into a wide erasing beam." }
+        { slot: 3, name: "Void Purple", cooldown: 24000, effect: "voidPurple", desc: "Blue and Red collapse together into an HP-cutting erasure beam." },
+        { slot: 4, name: "Domain Expansion", cooldown: 1000, effect: "voidDomain", desc: "Spend full Domain meter to freeze reality, move faster, and lower Void cooldowns." },
+        { slot: 5, name: "Limitless Eclipse", cooldown: 22000, effect: "voidEclipse", desc: "Domain-only finisher that opens the eye and tears a heavy chunk from superbosses." }
       ],
-      desc: "Blindfolded spatial breaker with a short opening Infinity barrier. Nah, I'd win."
+      desc: "Blindfolded spatial breaker with regeneration, Infinity defense, Domain Expansion, and a hidden Domain finisher. Nah, I'd win."
     },
     god: {
       name: "The Divine One",
@@ -371,11 +402,13 @@
   };
 
   const defaultSave = () => ({
-    version: 5,
+    version: 6,
     coins: 0,
     ownedWeapons: ["default"],
     equippedWeapon: "default",
     weaponLevels: { default: 1 },
+    ownedWings: ["none"],
+    equippedWings: "none",
     ownedCharacters: ["blue"],
     equippedCharacter: "blue",
     leaderboard: [],
@@ -391,6 +424,7 @@
   window.VerdantRushContent = {
     gameTuning,
     weapons,
+    wings,
     characters,
     stageCatalog,
     powerDefinitions,

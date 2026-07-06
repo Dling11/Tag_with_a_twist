@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  function createAudioSystem({ getSettings, getMode, getCharacter, getStage, getBoss, isDivineOverdriveActive }) {
+  function createAudioSystem({ getSettings, getMode, getCharacter, getStage, getBoss, isDivineOverdriveActive, isVoidDomainActive }) {
     let audioContext = null;
     let musicTimer = 0;
     let musicStep = 0;
@@ -32,6 +32,10 @@
     function playMusicStep() {
       const character = getCharacter();
       const boss = getBoss?.();
+      if (character.void && isVoidDomainActive?.()) {
+        playVoidTheme(true);
+        return;
+      }
       if (getStage?.() === 11 || boss?.superboss) {
         playOneAboveTheme(boss);
         return;
@@ -41,11 +45,14 @@
         return;
       }
 
-      const track = character.void
-        ? [131, 196, 262, 392, 523]
-        : [262, 330, 392, 523];
+      if (character.void) {
+        playVoidTheme(false);
+        return;
+      }
+
+      const track = [262, 330, 392, 523];
       const note = track[musicStep % track.length];
-      playTone(note, .16, character.void ? "sawtooth" : "sine", character.void ? .026 : .016);
+      playTone(note, .16, "sine", .016);
       musicStep += 1;
     }
 
@@ -60,6 +67,19 @@
       playTone(note, ascended ? .42 : .34, "triangle", ascended ? .018 : .012);
       if (musicStep % 3 === 2) playTone(note * 2, .9, "sine", ascended ? .012 : .008, note * 2.01);
       if (ascended && musicStep % 4 === 1) playTone(41, .65, "square", .012);
+      musicStep += 1;
+    }
+
+    function playVoidTheme(domainActive) {
+      const bass = domainActive ? [49, 55, 65, 73] : [65, 98, 131, 147];
+      const melody = domainActive ? [196, 247, 294, 392, 494, 587] : [131, 196, 247, 262, 392, 523];
+      const low = bass[musicStep % bass.length];
+      const note = melody[Math.floor(musicStep / 2) % melody.length];
+
+      playTone(low, domainActive ? .92 : .54, domainActive ? "square" : "sawtooth", domainActive ? .024 : .018, low * .992);
+      playTone(note, domainActive ? .28 : .18, "triangle", domainActive ? .024 : .016, note * (domainActive ? 1.015 : 1.005));
+      if (musicStep % 2 === 1) playTone(note * 2, domainActive ? .38 : .26, "sine", domainActive ? .014 : .008);
+      if (domainActive && musicStep % 3 === 2) playTone(39, .5, "sawtooth", .014, 41);
       musicStep += 1;
     }
 

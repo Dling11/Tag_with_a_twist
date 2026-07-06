@@ -35,15 +35,22 @@ Use this file as the handoff note for future Codex conversations. If continuing 
 - Increased weapon and character prices so unlocks feel more like prizes.
 - Added character skills on hotkeys `1`, `2`, `3`, and `4`, plus clickable/tappable skill HUD buttons.
 - Added Green, Red, Yellow, Cyan, Void, God, and starter Blue skill definitions.
-- Added original `Void Limit` premium character with blindfold/cloak SVG art, a 4.8-second opening Infinity barrier, stronger premium stats, and upgraded blue singularity / red reversal / purple erasure abilities.
+- Added original `Void Limit` premium character with blindfold/cloak SVG art, regeneration, a 4.8-second opening Infinity barrier, stronger premium stats, upgraded blue singularity / red reversal / HP-scaling purple erasure abilities, and a full-meter slot-4 `Domain Expansion`.
+- `Void Limit` has a Domain meter shown during gameplay. The meter fills slowly from Void skill use, real damage taken, Infinity barrier blocks, and shield blocks. At 100%, slot `4` activates `Domain Expansion` for 14 seconds: a center eye cut-in says `DOMAIN EXPANSION / INFINITE VOID`, the arena turns black, enemies and boss timers slow, Void becomes immune to normal damage, movement becomes much faster without blink teleporting, Void skill cooldowns are shortened, enemies are pulled/damaged periodically, and the domain ends with a radial `VOID ERASURE` burst. Domain is strong but intentionally below The Divine One and does not bypass special one-hit attacks marked as divine/absolute.
+- Added Void slot `5`, `Limitless Eclipse`, as a Domain-only eye-open finisher. It is disabled until Domain is active, fires screen-wide blue/red/purple Eclipse beams, and deals a meaningful HP-based chunk to `The One Above` phase 2 so Void has a real but still demanding path to win.
+- Improved Void presentation with a darker WebAudio theme, a Domain-active music override, black-violet movement trails, stronger Domain aura, upgraded eye cut-in visuals, and a lightly revised original white-hair/blindfold sprite.
 - Added custom God SVG art and five absurd premium God skills.
 - Added boss-clear celebration with portal/gate animation before stage clear.
 - Added lightweight generated WebAudio music loop plus stronger skill/ultimate/portal sound effects.
 - Renamed the premium God character display name to `The Divine One`.
 - Added settings buttons for sound on/off in the main menu and pause menu.
 - Added visible equipped weapon HUD plus weapon art attached to the player.
+- Replaced the old plain circular Palm Strike marker with `assets/weapon-palm.svg` so switching back from other weapons no longer shows an awkward orb/circle on the player or HUD.
 - Added weapon upgrade tiers, upgrade costs, and level scaling for damage/range.
 - Added Inventory skill/details preview text for characters and weapons.
+- Added separate reward-only wing equipment. `Seraph Dominion Wings` are earned by defeating `The One Above`, auto-equip on first victory, persist in the save as `ownedWings/equippedWings`, are visible behind the player, and have their own Loadout tab/card separate from weapons and characters.
+- `Seraph Dominion Wings` grant +1 heart, +18 speed, +28 magnet, and a last-miracle revive. Character revives resolve first; if those are unavailable or blocked by `noRevive`, the wings can still revive the player unless a future attack explicitly passes `ignoreWings`. On revive, wings heal to full, grant about 3.2 seconds of real seraph immunity that can protect through The One Above absolute flags, about 8 seconds of shield/speed grace, spawn hearts, play a feather/wing animation, and enter a 90-second cooldown.
+- Improved `Hall of Souls` into a richer record view with summary stats, victory/fallen cards, run time, gear, wing relic status, and reward tags. Leaderboard keeps up to 12 runs now.
 - Added stage-specific terrain decoration sets.
 - Added mini-boss enemy spawns from stage 3 onward.
 - Improved stage 10 with more HP and new final-boss skills.
@@ -54,11 +61,13 @@ Use this file as the handoff note for future Codex conversations. If continuing 
 - Stage 10 is still played before stage 11; losing on stage 11 does not unlock Return Gate directly to stage 11.
 - Added `Divine Overdrive`, a 10-second blue-gold aura mode with blink movement, immunity, and all-direction divine beams.
 - Swapped The Divine One skills so `Reality Crack` is skill `4` and the more broken `Divine Overdrive` is skill `5`.
+- The Divine One has quiet passive immunity only on stages 1-9. Stage 10+ can damage him normally, with the revive/overdrive fantasy still intact; do not use the normal `.invincible` blink for passive divine blocks because it caused stage-10 flicker. The normal invincibility blink was softened to a slower shimmer instead of a harsh strobe.
 - The Divine One execute skills use normal boss thresholds on regular bosses, but The One Above phase 2 can only be executed at 8% HP or lower. Against The One Above phase 2, Celestial Verdict direct boss damage is 7.5% max HP and Reality Crack direct boss damage is 9.5% max HP instead of their normal 28%/32% chunks.
 - Improved The Divine One music with a separate blue-gold divine theme, overdrive variation, and simple angelic choir-style sine chords.
 - Split input constants and audio into separate scripts so future skills/bosses can be expanded more safely.
 - Delayed boss-clear gate text until large skill text finishes, reducing the weird mixed-word overlap.
 - Revised final-boss wording toward the empty-throne / godlike-anime tone.
+- Stage start now applies the stage theme before decoration generation and force-clears night/domain/arena overlays instantly, preventing stage 1 from briefly looking like a night stage after previous runs.
 - Verified with syntax checks and headless Edge smoke tests.
 
 ## Current Design Direction
@@ -107,12 +116,18 @@ Use this file as the handoff note for future Codex conversations. If continuing 
   - sound button toggles
   - weapon upgrades persist
   - weapon/character equip is visible
+  - Seraph Dominion Wings unlock after defeating The One Above, auto-equip, persist after reload, appear in Loadout > Wings, and render behind the player
+  - wing revive triggers after character revives are unavailable, works against The One Above `noRevive` attacks, grants immunity/haste/shield/hearts, then enters long cooldown
   - desktop movement and attack work
   - `1/2/3/4/5` skills work and show cooldowns
+  - Void Limit shows Domain meter during gameplay, regenerates HP over time, fills Domain slowly from skills/damage/blocks, and slot `4` only activates at 100%
+  - Void Domain Expansion lasts about 14 seconds, shows the eye cut-in, black domain field, faster no-blink movement, lower Void cooldowns, enemy slow/pull/damage, immunity to normal hits, and final Void Erasure burst
+  - Void slot `5` stays locked outside Domain, becomes usable inside Domain, shows the Eclipse cut-in/beams, and meaningfully damages The One Above phase 2 without deleting him instantly
   - The Divine One `4` skill shows compact `REALITY CRACK` and creates reality-cut beams
   - The Divine One `5` skill shows compact `DIVINE OVERDRIVE`, keeps the aura active, and fires omnibeams
   - mobile joystick/attack/skill buttons show above sprites
   - boss clear creates portal/celebration
+  - Hall of Souls shows stats, ranked cards, gear/wings, run time, and reward tags
   - stage 11 starts directly with The One Above
   - The One Above gives a short pre-fight speech before phase 1 attacks start
   - The One Above phase 1 death transforms into phase 2 instead of ending the game

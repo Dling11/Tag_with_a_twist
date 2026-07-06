@@ -4,6 +4,7 @@
   const {
     gameTuning,
     weapons,
+    wings,
     characters,
     stageCatalog,
     powerDefinitions,
@@ -46,18 +47,25 @@
   const bossSelectGrid = $("bossSelectGrid");
   const equippedWeaponValue = $("equippedWeaponValue");
   const equippedCharacterValue = $("equippedCharacterValue");
+  const equippedWingsValue = $("equippedWingsValue");
   const loadoutWeaponValue = $("loadoutWeaponValue");
   const loadoutCharacterValue = $("loadoutCharacterValue");
+  const loadoutWingsValue = $("loadoutWingsValue");
   const loadoutWalletValue = $("loadoutWalletValue");
   const weaponLoadoutGrid = $("weaponLoadoutGrid");
   const characterLoadoutGrid = $("characterLoadoutGrid");
+  const wingsLoadoutGrid = $("wingsLoadoutGrid");
   const skillDetails = $("skillDetails");
   const skillHud = $("skillHud");
+  const domainMeter = $("domainMeter");
   const weaponStatus = $("weaponStatus");
+  const wingStatus = $("wingStatus");
+  const leaderboardStats = $("leaderboardStats");
   const touchControls = $("touchControls");
   const joystick = $("joystick");
   const stick = $("stick");
   const touchAttackBtn = $("touchAttackBtn");
+  const creditsRewardText = $("creditsRewardText");
 
   const screens = {
     start: $("startScreen"),
@@ -137,9 +145,20 @@
     touchAttackHeld: false,
     skillCooldowns: {},
     renderedSkillSignature: "",
+    renderedDomainSignature: "",
     divineOverdriveUntil: 0,
     nextDivineBeamAt: 0,
     voidBarrierUntil: 0,
+    voidDomainCharge: 0,
+    voidDomainUntil: 0,
+    voidDomainFreezeUntil: 0,
+    nextVoidDomainTickAt: 0,
+    nextVoidRegenAt: 0,
+    lastVoidTrailAt: 0,
+    wingReviveReadyAt: 0,
+    wingGraceUntil: 0,
+    wingReviveCount: 0,
+    lastWingGraceTextAt: 0,
     lastBlinkAt: 0,
     deathTaunt: "",
     cage: null,
@@ -170,7 +189,8 @@
     getCharacter,
     getStage: () => state.stage,
     getBoss: () => state.boss,
-    isDivineOverdriveActive: () => performance.now() < state.divineOverdriveUntil
+    isDivineOverdriveActive: () => performance.now() < state.divineOverdriveUntil,
+    isVoidDomainActive: () => performance.now() < state.voidDomainUntil
   });
 
   boot();
@@ -320,25 +340,30 @@
   function startRun(stage, options = {}) {
     state.runCoins = 0;
     state.bankedThisRun = 0;
+    state.voidDomainCharge = 0;
+    state.renderedDomainSignature = "";
     startMusic();
     startStage(stage, options);
   }
 
   function startStage(stage, options = {}) {
     state.arenaScale = 1;
-    gameWrap.classList.remove("one-above-arena");
+    gameWrap.classList.remove("one-above-arena", "one-above-wrath", "void-domain-active");
     resize();
     clearDynamicElements();
     const stageInfo = getStageInfo(stage);
+    applyStageTheme(stageInfo);
+    resetNightOverlayInstant();
     generateDecorations(stageInfo);
     const character = getCharacter();
+    const wing = getEquippedWings();
     state.mode = "playing";
     state.stage = stageInfo.id;
     state.phase = "mobs";
     state.elapsed = 0;
     state.stageKills = 0;
     state.killGoal = stageInfo.killGoal;
-    state.maxHealth = Math.max(2, 4 + gameTuning.healthBonus + character.health);
+    state.maxHealth = Math.max(2, 4 + gameTuning.healthBonus + character.health + (wing.health || 0));
     state.health = state.maxHealth;
     state.renderedHealth = -1;
     state.invincibleUntil = 0;
@@ -359,6 +384,15 @@
     state.divineOverdriveUntil = 0;
     state.nextDivineBeamAt = 0;
     state.voidBarrierUntil = 0;
+    state.voidDomainUntil = 0;
+    state.voidDomainFreezeUntil = 0;
+    state.nextVoidDomainTickAt = 0;
+    state.nextVoidRegenAt = character.void ? performance.now() + (character.regenMs || 6200) : 0;
+    state.lastVoidTrailAt = 0;
+    state.wingReviveReadyAt = 0;
+    state.wingGraceUntil = 0;
+    state.wingReviveCount = 0;
+    state.lastWingGraceTextAt = 0;
     state.lastBlinkAt = 0;
     state.deathTaunt = "";
     state.cage = null;
@@ -377,10 +411,10 @@
     state.player.vy = 0;
     updatePlayerSkin();
     renderSkillHud(true);
-    playerEl.classList.remove("invincible", "boosted", "shielded", "low-health", "divine-overdrive", "void-barrier");
-    nightOverlay.classList.remove("active");
+    playerEl.classList.remove("invincible", "boosted", "shielded", "low-health", "divine-overdrive", "void-barrier", "wing-grace");
+    gameWrap.classList.remove("one-above-arena", "one-above-wrath", "void-domain-active");
+    resetNightOverlayInstant();
     bossBar.classList.remove("active");
-    applyStageTheme(stageInfo);
     updateHud();
     showScreen(null);
     if (character.void) {
@@ -448,12 +482,15 @@
     updatePowers();
     updateStageAtmosphere();
     updateDivineOverdrive();
+    updateVoidRegeneration();
+    updateVoidDomain(dt);
     updateParticles(dt);
     updateFloatingText();
     if (performance.now() > state.invincibleUntil) playerEl.classList.remove("invincible");
     updateLowHealthWarning();
     updatePowerClasses();
     renderSkillHud();
+    renderDomainMeter();
     updateHud();
   }
 
@@ -476,24 +513,36 @@
       state.player.aimY = dy;
     }
     const character = getCharacter();
+    const wing = getEquippedWings();
+    const now = performance.now();
     const speedBoost = getPowerTimeLeft("boost") > 0 ? 1.34 : 1;
-    const divineBoost = performance.now() < state.divineOverdriveUntil ? 1.42 : 1;
+    const divineActive = now < state.divineOverdriveUntil;
+    const voidDomainActive = character.void && now < state.voidDomainUntil;
+    const wingGraceActive = now < state.wingGraceUntil;
+    const divineBoost = divineActive ? 1.42 : 1;
+    const voidDomainBoost = voidDomainActive ? 1.42 : 1;
+    const wingBoost = wingGraceActive ? 1.42 : 1;
     const arenaBoost = state.arenaScale > 1 ? state.arenaScale : 1;
-    const targetVx = dx * (state.player.speed + character.speed) * speedBoost * divineBoost * arenaBoost;
-    const targetVy = dy * (state.player.speed + character.speed) * speedBoost * divineBoost * arenaBoost;
+    const baseSpeed = state.player.speed + character.speed + (wing.speed || 0);
+    const targetVx = dx * baseSpeed * speedBoost * divineBoost * voidDomainBoost * wingBoost * arenaBoost;
+    const targetVy = dy * baseSpeed * speedBoost * divineBoost * voidDomainBoost * wingBoost * arenaBoost;
     const smoothing = 1 - Math.pow(0.0009, dt);
     state.player.vx += (targetVx - state.player.vx) * smoothing;
     state.player.vy += (targetVy - state.player.vy) * smoothing;
     state.player.x += state.player.vx * dt;
     state.player.y += state.player.vy * dt;
-    if (performance.now() < state.divineOverdriveUntil && Math.hypot(dx, dy) > .1 && performance.now() - state.lastBlinkAt > 520) {
-      state.lastBlinkAt = performance.now();
+    if (divineActive && Math.hypot(dx, dy) > .1 && now - state.lastBlinkAt > 520) {
+      state.lastBlinkAt = now;
       const oldX = state.player.x;
       const oldY = state.player.y;
       state.player.x += dx * 34;
       state.player.y += dy * 34;
       clampPlayer();
       createBlinkTrail(oldX, oldY, state.player.x, state.player.y);
+    }
+    if (voidDomainActive && Math.hypot(dx, dy) > .1 && now - state.lastVoidTrailAt > 135) {
+      state.lastVoidTrailAt = now;
+      createVoidStepTrail(state.player.x - dx * 42, state.player.y - dy * 42, state.player.x + dx * 18, state.player.y + dy * 18);
     }
     if (Math.abs(state.player.vx) > 8) state.player.facing = state.player.vx >= 0 ? 1 : -1;
     clampPlayer();
@@ -659,6 +708,131 @@
     burst(state.player.x, state.player.y, 36, ["#ffffff", "#65e5ff", "#8d59ff", "#111827"]);
   }
 
+  function addVoidDomainCharge(amount) {
+    if (!getCharacter().void || performance.now() < state.voidDomainUntil) return;
+    const previous = state.voidDomainCharge;
+    state.voidDomainCharge = clamp(state.voidDomainCharge + amount, 0, 100);
+    if (previous < 100 && state.voidDomainCharge >= 100) {
+      createScreenEffect("void-purple compact", "DOMAIN READY");
+      floatText("DOMAIN READY", state.player.x, state.player.y - 76);
+      playSound("power");
+    }
+    renderDomainMeter(true);
+    renderSkillHud(true);
+  }
+
+  function activateVoidDomainExpansion() {
+    const now = performance.now();
+    const character = getCharacter();
+    const duration = character.domainDuration || 9000;
+    state.voidDomainCharge = 0;
+    state.voidDomainUntil = now + duration;
+    state.voidDomainFreezeUntil = now + 1550;
+    state.nextVoidDomainTickAt = now + 1020;
+    state.lastVoidTrailAt = 0;
+    state.voidBarrierUntil = Math.max(state.voidBarrierUntil || 0, now + duration);
+    state.invincibleUntil = Math.max(state.invincibleUntil || 0, now + duration);
+    gameWrap.classList.add("void-domain-active");
+    playerEl.classList.add("void-barrier");
+    accelerateVoidSkillCooldowns(now);
+    createVoidDomainCutin(duration);
+    createScreenEffect("void-domain", "DOMAIN EXPANSION");
+    createShockwave(state.player.x, state.player.y, 980, "void-purple void-erasure", "DOMAIN");
+    pullEnemies(state.player.x, state.player.y, 900, 260, 0);
+    shake();
+    queueTimer(() => shake(), 180);
+    queueTimer(() => shake(), 430);
+    queueTimer(() => finishVoidDomainExpansion(), duration - 320);
+    playSound("ultimate");
+    renderDomainMeter(true);
+    renderSkillHud(true);
+  }
+
+  function createVoidDomainCutin(duration) {
+    const cutin = document.createElement("div");
+    cutin.className = "void-domain-cutin";
+    cutin.innerHTML = "<span>DOMAIN EXPANSION</span><strong>INFINITE VOID</strong><i><b></b></i>";
+    gameWrap.appendChild(cutin);
+    queueTimer(() => cutin.remove(), 1900);
+
+    const field = document.createElement("div");
+    field.className = "void-domain-field";
+    field.style.setProperty("--domain-duration", `${duration}ms`);
+    effectLayer.appendChild(field);
+    queueTimer(() => field.remove(), duration + 420);
+  }
+
+  function createVoidEclipseCutin() {
+    const cutin = document.createElement("div");
+    cutin.className = "void-domain-cutin void-eclipse-cutin";
+    cutin.innerHTML = "<span>LIMITLESS</span><strong>ECLIPSE</strong><i><b></b></i>";
+    gameWrap.appendChild(cutin);
+    queueTimer(() => cutin.remove(), 1250);
+  }
+
+  function updateVoidRegeneration() {
+    const character = getCharacter();
+    if (!character.void || state.mode !== "playing") return;
+    const now = performance.now();
+    const interval = character.regenMs || 6200;
+    if (!state.nextVoidRegenAt) state.nextVoidRegenAt = now + interval;
+    if (state.health >= state.maxHealth) {
+      state.nextVoidRegenAt = Math.max(state.nextVoidRegenAt, now + interval * .5);
+      return;
+    }
+    if (now < state.nextVoidRegenAt) return;
+    state.health = Math.min(state.maxHealth, state.health + 1);
+    state.renderedHealth = -1;
+    state.nextVoidRegenAt = now + interval;
+    createShockwave(state.player.x, state.player.y, 250, "void-blue void-barrier-wave", "REVERSE");
+    burst(state.player.x, state.player.y, 26, ["#ffffff", "#65e5ff", "#8d59ff"]);
+    floatText("+VOID HP", state.player.x, state.player.y - 62);
+    playSound("heal");
+  }
+
+  function updateVoidDomain(dt) {
+    const now = performance.now();
+    const active = getCharacter().void && now < state.voidDomainUntil;
+    gameWrap.classList.toggle("void-domain-active", active);
+    if (!active) return;
+    if (now >= state.nextVoidDomainTickAt) {
+      state.nextVoidDomainTickAt = now + 560;
+      pullEnemies(state.player.x, state.player.y, 900, 145, 0);
+      const bossDamage = state.boss ? getVoidDomainBossDamage(state.boss, 380, .0085, 760) : 380;
+      damageEnemiesInRadius(state.player.x, state.player.y, 900, 110, bossDamage);
+      createShockwave(state.player.x, state.player.y, 470, "void-purple void-erasure", "");
+      if (Math.random() < .64) {
+        const angle = random(0, Math.PI * 2);
+        createBeamAt(state.player.x, state.player.y, "void-purple void-erasure", angle, Math.max(state.width, state.height) * .95, 78, 540, "");
+      }
+    }
+  }
+
+  function finishVoidDomainExpansion() {
+    if (!getCharacter().void || performance.now() > state.voidDomainUntil + 400) return;
+    createScreenEffect("void-domain void-domain-end", "VOID ERASURE");
+    for (let i = 0; i < 8; i += 1) {
+      const angle = (Math.PI * 2 * i) / 8;
+      createBeamAt(state.player.x, state.player.y, "void-purple void-erasure", angle, Math.max(state.width, state.height) * 1.15, 96, 760, "");
+    }
+    const bossDamage = state.boss ? getVoidDomainBossDamage(state.boss, 1700, .045, 3400) : 1700;
+    damageEnemiesInRadius(state.player.x, state.player.y, 9999, 360, bossDamage);
+    createShockwave(state.player.x, state.player.y, 1120, "void-purple void-erasure", "ERASE");
+    shake();
+  }
+
+  function getVoidDomainBossDamage(boss, normalDamage, superbossPercent, minimum) {
+    if (boss?.superboss && boss.superPhase === 2) return Math.max(minimum, boss.maxHp * superbossPercent);
+    if (boss?.type === "final") return Math.round(normalDamage * 1.35);
+    return normalDamage;
+  }
+
+  function getVoidDomainEnemyFactor(now = performance.now()) {
+    if (!getCharacter().void || now >= state.voidDomainUntil) return 1;
+    if (now < state.voidDomainFreezeUntil) return .02;
+    return .22;
+  }
+
   function updateDivineOverdrive() {
     const now = performance.now();
     const active = now < state.divineOverdriveUntil;
@@ -710,6 +884,27 @@
     playSound("reality");
   }
 
+  function getSkillCooldown(skill, now = performance.now()) {
+    const character = getCharacter();
+    if (character.void && skill.effect !== "voidDomain" && now < state.voidDomainUntil) {
+      const multiplier = skill.effect === "voidEclipse" ? .3 : .38;
+      const floor = skill.effect === "voidEclipse" ? 5600 : 1700;
+      return Math.max(floor, skill.cooldown * multiplier);
+    }
+    return skill.cooldown;
+  }
+
+  function accelerateVoidSkillCooldowns(now = performance.now()) {
+    const character = getCharacter();
+    if (!character.void) return;
+    for (const skill of character.skills || []) {
+      if (skill.effect === "voidDomain") continue;
+      const readyAt = state.skillCooldowns[skill.slot] || 0;
+      const reducedReadyAt = now + getSkillCooldown(skill, now);
+      if (readyAt > reducedReadyAt) state.skillCooldowns[skill.slot] = reducedReadyAt;
+    }
+  }
+
   function useSkill(slot) {
     const character = getCharacter();
     const skill = character.skills?.find((item) => item.slot === slot);
@@ -725,8 +920,24 @@
       floatText(`${Math.ceil((readyAt - now) / 1000)}s`, state.player.x, state.player.y - 54);
       return;
     }
+    if (skill.effect === "voidDomain" && now < state.voidDomainUntil) {
+      floatText("DOMAIN ACTIVE", state.player.x, state.player.y - 54);
+      return;
+    }
+    if (skill.effect === "voidDomain" && state.voidDomainCharge < 100) {
+      floatText(`DOMAIN ${Math.floor(state.voidDomainCharge)}%`, state.player.x, state.player.y - 54);
+      playSound("click");
+      renderSkillHud(true);
+      return;
+    }
+    if (skill.effect === "voidEclipse" && now >= state.voidDomainUntil) {
+      floatText("DOMAIN ONLY", state.player.x, state.player.y - 54);
+      playSound("click");
+      renderSkillHud(true);
+      return;
+    }
 
-    state.skillCooldowns[slot] = now + skill.cooldown;
+    state.skillCooldowns[slot] = now + getSkillCooldown(skill, now);
     performSkill(skill.effect, skill);
     renderSkillHud(true);
   }
@@ -784,6 +995,7 @@
       damageEnemiesInBeam(aim, 760, 205, 120, 180);
       createShockwave(point.x, point.y, 320, "void-blue void-lapse", "BLUE");
       queueTimer(() => createShockwave(point.x, point.y, 420, "void-blue void-lapse", ""), 140);
+      addVoidDomainCharge(7);
       playSound("skill");
     } else if (effect === "voidRed") {
       createScreenEffect("void-red compact", "REVERSAL RED");
@@ -793,12 +1005,15 @@
       damageEnemiesInRadius(state.player.x, state.player.y, 540, 170, 270);
       shake();
       queueTimer(() => shake(), 180);
+      addVoidDomainCharge(9);
       playSound("skill");
     } else if (effect === "voidPurple") {
       createScreenEffect("void-purple", "VOID PURPLE");
       const side = { x: -aim.y, y: aim.x };
       const bluePoint = { x: state.player.x + side.x * 74, y: state.player.y + side.y * 74 };
       const redPoint = { x: state.player.x - side.x * 74, y: state.player.y - side.y * 74 };
+      const domainActive = now < state.voidDomainUntil;
+      const bossDamage = state.boss ? getVoidPurpleBossDamage(state.boss, domainActive) : 980;
       createShockwave(bluePoint.x, bluePoint.y, 310, "void-blue void-lapse", "BLUE");
       createShockwave(redPoint.x, redPoint.y, 310, "void-red void-reversal", "RED");
       pullEnemies(state.player.x, state.player.y, 520, 170, 0);
@@ -806,13 +1021,39 @@
       queueTimer(() => {
         const length = Math.max(state.width, state.height) * 1.55;
         createBeam("void-purple void-erasure", aim, length, 310, 1280, "VOID PURPLE");
-        damageEnemiesInBeam(aim, length, 340, 640, 980);
-        damageEnemiesInRadius(state.player.x, state.player.y, 390, 160, 260);
-        createShockwave(state.player.x, state.player.y, 760, "void-purple void-erasure", "PURPLE");
+        damageEnemiesInBeam(aim, length, 340, 680, bossDamage);
+        damageEnemiesInRadius(state.player.x, state.player.y, 430, 170, Math.min(bossDamage * .24, 1300));
+        createShockwave(state.player.x, state.player.y, domainActive ? 920 : 760, "void-purple void-erasure", "PURPLE");
         shake();
       }, 260);
       queueTimer(() => shake(), 520);
+      addVoidDomainCharge(12);
       playSound("ultimate");
+    } else if (effect === "voidDomain") {
+      activateVoidDomainExpansion();
+    } else if (effect === "voidEclipse") {
+      createVoidEclipseCutin();
+      createScreenEffect("void-domain void-domain-end", "LIMITLESS ECLIPSE");
+      pullEnemies(state.player.x, state.player.y, 1100, 360, 0);
+      createShockwave(state.player.x, state.player.y, 900, "void-purple void-eclipse", "EYE OPEN");
+      state.voidDomainFreezeUntil = Math.max(state.voidDomainFreezeUntil, now + 950);
+      for (let i = 0; i < 12; i += 1) {
+        const angle = (Math.PI * 2 * i) / 12;
+        queueTimer(() => {
+          const className = i % 3 === 0 ? "void-blue void-lapse void-eclipse" : i % 3 === 1 ? "void-red void-reversal void-eclipse" : "void-purple void-erasure void-eclipse";
+          createBeamAt(state.player.x, state.player.y, className, angle, Math.max(state.width, state.height) * 1.24, 92, 760, i === 0 ? "ECLIPSE" : "");
+        }, i * 38);
+      }
+      queueTimer(() => {
+        const bossDamage = state.boss ? getVoidEclipseBossDamage(state.boss) : 2200;
+        damageEnemiesInRadius(state.player.x, state.player.y, 9999, 980, bossDamage);
+        createShockwave(state.player.x, state.player.y, 1280, "void-purple void-eclipse", "COLLAPSE");
+        burst(state.player.x, state.player.y, 82, ["#ffffff", "#65e5ff", "#8d59ff", "#05060c"]);
+        shake();
+      }, 420);
+      queueTimer(() => shake(), 180);
+      queueTimer(() => shake(), 560);
+      playSound("reality");
     } else if (effect === "godShockwave") {
       createScreenEffect("god-flash compact", "DIVINE PULSE");
       createShockwave(state.player.x, state.player.y, 520, "god", "DIVINE PULSE");
@@ -869,6 +1110,26 @@
   function getDivineBossDamage(boss, normalPercent, superbossPercent, minimum) {
     const percent = boss.superboss && boss.superPhase === 2 ? superbossPercent : normalPercent;
     return Math.max(minimum, boss.maxHp * percent);
+  }
+
+  function hasQuietDivineImmunity(character = getCharacter()) {
+    return Boolean(character.god && state.stage < 10);
+  }
+
+  function getVoidPurpleBossDamage(boss, domainActive = false) {
+    if (boss?.superboss && boss.superPhase === 2) {
+      const percent = domainActive ? .058 : .04;
+      const minimum = domainActive ? 5200 : 3600;
+      return Math.max(minimum, boss.maxHp * percent);
+    }
+    if (boss?.type === "final") return domainActive ? 1450 : 980;
+    return domainActive ? 980 : 720;
+  }
+
+  function getVoidEclipseBossDamage(boss) {
+    if (boss?.superboss && boss.superPhase === 2) return Math.max(6600, boss.maxHp * .07);
+    if (boss?.type === "final") return 1900;
+    return 1350;
   }
 
   function damageEnemiesInRadius(x, y, radius, amount, bossAmount = amount) {
@@ -989,6 +1250,18 @@
     setTimeout(() => element.remove(), 360);
   }
 
+  function createVoidStepTrail(fromX, fromY, toX, toY) {
+    const element = document.createElement("div");
+    element.className = "blink-trail void-step-trail";
+    element.style.setProperty("--x1", `${fromX}px`);
+    element.style.setProperty("--y1", `${fromY}px`);
+    element.style.setProperty("--x2", `${toX}px`);
+    element.style.setProperty("--y2", `${toY}px`);
+    element.style.setProperty("--rot", `${Math.atan2(toY - fromY, toX - fromX)}rad`);
+    effectLayer.appendChild(element);
+    setTimeout(() => element.remove(), 430);
+  }
+
   function createSlash(x, y, angle) {
     const element = document.createElement("div");
     element.className = "attack-arc";
@@ -1065,6 +1338,7 @@
     const stageInfo = getStageInfo();
     const now = performance.now();
     const freezeFactor = getPowerTimeLeft("freeze") > 0 ? .18 : 1;
+    const domainFactor = getVoidDomainEnemyFactor(now);
     const hasteFactor = now < state.enemyHasteUntil ? 1.34 : 1;
     for (const enemy of [...state.enemies]) {
       const channeling = enemy.channelingUntil && now < enemy.channelingUntil;
@@ -1078,14 +1352,14 @@
           maybeActivateOneAboveWrath(enemy);
           enemy.hp = Math.min(enemy.maxHp, enemy.hp + (enemy.wrathUnlocked ? 96 : 48) * dt);
         }
-        enemy.skillTimer -= dt * 1000;
+        enemy.skillTimer -= dt * 1000 * Math.max(domainFactor, enemy.superboss ? .5 : .2);
         if (enemy.skillTimer <= 0) {
           bossSkill(enemy);
           enemy.skillTimer = enemy.nextSkillDelay || (enemy.superboss && enemy.superPhase === 2 ? (enemy.wrathUnlocked ? 1050 : 1450) : enemy.type === "final" ? 1050 : 2200);
           enemy.nextSkillDelay = 0;
         }
       } else if (enemy.variant === "miniBoss") {
-        enemy.skillTimer -= dt * 1000;
+        enemy.skillTimer -= dt * 1000 * Math.max(domainFactor, .2);
         if (enemy.skillTimer <= 0) {
           createHazard(state.player.x, state.player.y, 52, 540, 320, 1, "mini");
           enemy.skillTimer = random(2400, 3600);
@@ -1105,7 +1379,7 @@
       const len = Math.hypot(moveX, moveY) || 1;
       const bossFactor = enemy.type === "boss" || enemy.type === "final" ? .58 : 1;
       const ghostFactor = enemy.type === "ghost" ? .7 : 1;
-      const speed = getEnemySpeed(stageInfo) * enemy.speedMultiplier * bossFactor * ghostFactor * freezeFactor * hasteFactor;
+      const speed = getEnemySpeed(stageInfo) * enemy.speedMultiplier * bossFactor * ghostFactor * freezeFactor * domainFactor * hasteFactor;
       enemy.x += (moveX / len) * speed * dt;
       enemy.y += (moveY / len) * speed * dt;
       enemy.x = clamp(enemy.x, enemy.r, state.width - enemy.r);
@@ -1812,7 +2086,7 @@
   }
 
   function updatePickups() {
-    const magnet = 42 + getCharacter().magnet;
+    const magnet = 42 + getCharacter().magnet + (getEquippedWings().magnet || 0);
     for (let i = state.pickups.length - 1; i >= 0; i -= 1) {
       const pickup = state.pickups[i];
       const dx = state.player.x - pickup.x;
@@ -1856,21 +2130,103 @@
     floatText(definition.message, power.x, power.y - 28);
   }
 
+  function tryCharacterRevive(character, options, now) {
+    if (options.noRevive || !character.god) return false;
+    if (state.stage < gameTuning.maxStage) state.revivesLeft = Math.max(state.revivesLeft, 1);
+    else state.revivesLeft += 1;
+    state.revivesLeft -= 1;
+    state.health = Math.ceil(state.maxHealth * .55);
+    state.renderedHealth = -1;
+    state.invincibleUntil = now + 2200;
+    playerEl.classList.add("invincible");
+    createGodWaves();
+    floatText("REVIVE", state.player.x, state.player.y - 55);
+    playSound("heal");
+    return true;
+  }
+
+  function tryWingRevive(options, now) {
+    const wing = getEquippedWings();
+    if (options.ignoreWings || !wing.reviveCooldown || state.save.equippedWings === "none") return false;
+    if (state.wingReviveReadyAt && now < state.wingReviveReadyAt) return false;
+    state.wingReviveReadyAt = now + wing.reviveCooldown;
+    state.wingGraceUntil = now + (wing.reviveBoostMs || 7600);
+    state.wingReviveCount += 1;
+    state.health = Math.max(1, Math.ceil(state.maxHealth * (wing.reviveHealRatio || .75)));
+    state.renderedHealth = -1;
+    state.invincibleUntil = now + (wing.reviveImmunityMs || 3000);
+    state.activePowers.boost = Math.max(state.activePowers.boost || 0, state.wingGraceUntil);
+    state.activePowers.shield = Math.max(state.activePowers.shield || 0, state.wingGraceUntil);
+    state.shieldCharges = Math.max(state.shieldCharges, 1);
+    playerEl.classList.add("invincible", "wing-grace");
+    createScreenEffect("wing-revive compact", "SERAPH REVIVE");
+    createWingReviveEffect(wing);
+    spawnWingHearts(wing.heartCount || 3);
+    floatText("ANGEL WINGS ANSWER", state.player.x, state.player.y - 78);
+    shake();
+    queueTimer(() => shake(), 180);
+    playSound("victory");
+    renderPowerStatus(true);
+    updateHud();
+    return true;
+  }
+
+  function createWingReviveEffect() {
+    createShockwave(state.player.x, state.player.y, 760, "wings", "REBIRTH");
+    burst(state.player.x, state.player.y, 72, ["#ffffff", "#fff4ad", "#77efff", "#b57cff"]);
+    for (let i = 0; i < 18; i += 1) {
+      const element = document.createElement("div");
+      const angle = (Math.PI * 2 * i) / 18;
+      element.className = "wing-feather";
+      element.style.setProperty("--x1", `${state.player.x}px`);
+      element.style.setProperty("--y1", `${state.player.y}px`);
+      element.style.setProperty("--x2", `${state.player.x + Math.cos(angle) * random(220, 520)}px`);
+      element.style.setProperty("--y2", `${state.player.y + Math.sin(angle) * random(160, 410)}px`);
+      element.style.setProperty("--rot", `${angle + Math.PI / 2}rad`);
+      effectLayer.appendChild(element);
+      setTimeout(() => element.remove(), 980);
+    }
+  }
+
+  function spawnWingHearts(count) {
+    for (let i = 0; i < count; i += 1) {
+      const angle = (Math.PI * 2 * i) / count;
+      const distance = 92 + i * 18;
+      const x = clamp(state.player.x + Math.cos(angle) * distance, 40, state.width - 40);
+      const y = clamp(state.player.y + Math.sin(angle) * distance, 96, state.height - 42);
+      createPickup("heart", x, y, 19);
+    }
+  }
+
   function damagePlayer(amount = 1, options = {}) {
     const now = performance.now();
     const character = getCharacter();
+    if (!options.ignoreWings && now < state.wingGraceUntil && now < state.invincibleUntil) {
+      if (now >= (state.lastWingGraceTextAt || 0)) {
+        state.lastWingGraceTextAt = now + 520;
+        floatText("SERAPH GRACE", state.player.x, state.player.y - 48);
+      }
+      return;
+    }
+    if (!options.ignoreDivine && character.void && now < state.voidDomainUntil) {
+      if (now >= state.invincibleUntil) {
+        state.invincibleUntil = now + 420;
+        floatText("UNLIMITED", state.player.x, state.player.y - 44);
+      }
+      return;
+    }
     if (!options.ignoreDivine && character.void && now < state.voidBarrierUntil) {
       if (now >= state.invincibleUntil) {
         state.invincibleUntil = now + 320;
         floatText("INFINITY", state.player.x, state.player.y - 44);
         createShockwave(state.player.x, state.player.y, 210, "void-blue void-barrier-wave", "");
+        addVoidDomainCharge(2);
       }
       return;
     }
-    if (!options.ignoreDivine && character.god && state.stage < gameTuning.maxStage) {
+    if (!options.ignoreDivine && hasQuietDivineImmunity(character)) {
       if (now >= state.invincibleUntil) {
         state.invincibleUntil = now + 650;
-        playerEl.classList.add("invincible");
         floatText("DIVINE", state.player.x, state.player.y - 44);
       }
       return;
@@ -1891,9 +2247,14 @@
       playSound("heal");
       burst(state.player.x, state.player.y, 24, ["#53ebb7", "#ffffff", "#9fffe2"]);
       floatText("BLOCK", state.player.x, state.player.y - 32);
+      if (character.void) addVoidDomainCharge(4);
       return;
     }
     state.health -= amount;
+    if (character.void) {
+      addVoidDomainCharge(11);
+      state.nextVoidRegenAt = now + (character.regenMs || 6200);
+    }
     if (character.rage && Math.random() < .55) {
       state.rageUntil = now + 5200;
       floatText("RAGE", state.player.x, state.player.y - 48);
@@ -1905,15 +2266,9 @@
     flashDamage();
     burst(state.player.x, state.player.y, 20, ["#ff4561", "#ffffff", "#8cecff"]);
     if (state.health <= 0) {
-      if (state.save.equippedCharacter === "god" && !options.noRevive) {
-        if (state.stage < gameTuning.maxStage) state.revivesLeft = Math.max(state.revivesLeft, 1);
-        else state.revivesLeft += 1;
-        state.revivesLeft -= 1;
-        state.health = Math.ceil(state.maxHealth * .55);
-        state.invincibleUntil = now + 2200;
-        createGodWaves();
-        floatText("REVIVE", state.player.x, state.player.y - 55);
-      } else endGame();
+      if (tryCharacterRevive(character, options, now)) return;
+      if (tryWingRevive(options, now)) return;
+      endGame();
     }
   }
 
@@ -2052,26 +2407,69 @@
     cancelAnimationFrame(animationId);
     stopMusic();
     bankCoins();
+    const wingReward = stageInfo.id === 11 ? unlockSeraphWings() : null;
     bossBar.classList.remove("active");
     $("stageClearTitle").textContent = `${stageInfo.name} cleared`;
-    $("stageClearText").textContent = `${stageInfo.clearText} You earned ${state.bankedThisRun} coins this run.`;
+    $("stageClearText").textContent = `${stageInfo.clearText} You earned ${state.bankedThisRun} coins this run.${wingReward ? ` ${wingReward.unlocked ? "Seraph Dominion Wings are now yours." : "Seraph Dominion Wings remain bound to you."}` : ""}`;
     showScreen("stageClear");
     updateSaveBest();
     persistSave();
   }
 
   function winGame() {
+    const stageInfo = getStageInfo();
     state.mode = "credits";
     cancelAnimationFrame(animationId);
     stopMusic();
     bankCoins();
+    const wingReward = stageInfo.id === 11 ? unlockSeraphWings() : null;
     askChampionName();
-    addLeaderboard(true);
+    addLeaderboard(true, wingReward);
     bossBar.classList.remove("active");
     nightOverlay.classList.add("active");
+    if (creditsRewardText) creditsRewardText.textContent = wingReward
+      ? wingReward.unlocked
+        ? "Reward: Seraph Dominion Wings claimed"
+        : "Reward: Seraph Dominion Wings remain bound"
+      : "Reward: bragging rights and very broken builds";
     playSound("victory");
     showScreen("credits");
     persistSave();
+  }
+
+  function unlockSeraphWings() {
+    const alreadyOwned = state.save.ownedWings?.includes("seraph");
+    state.save.ownedWings = Array.from(new Set(["none", ...(state.save.ownedWings || []), "seraph"]));
+    state.save.equippedWings = "seraph";
+    updatePlayerSkin();
+    updateEquippedSummary();
+    renderLoadout();
+    if (!alreadyOwned) {
+      createScreenEffect("wing-reward compact", "SERAPH WINGS CLAIMED");
+      createWingRewardEffect();
+      playSound("power");
+    }
+    return {
+      id: "seraph",
+      name: wings.seraph.name,
+      unlocked: !alreadyOwned
+    };
+  }
+
+  function createWingRewardEffect() {
+    createShockwave(state.width / 2, state.height / 2, 920, "wings", "RELIC");
+    for (let i = 0; i < 24; i += 1) {
+      queueAnyTimer(() => {
+        const angle = random(0, Math.PI * 2);
+        const distance = random(80, 360);
+        burst(
+          state.width / 2 + Math.cos(angle) * distance,
+          state.height / 2 + Math.sin(angle) * distance,
+          8,
+          ["#ffffff", "#fff4ad", "#77efff", "#b57cff"]
+        );
+      }, i * 45);
+    }
   }
 
   function endGame() {
@@ -2108,7 +2506,7 @@
     renderStageSelect();
   }
 
-  function addLeaderboard(won) {
+  function addLeaderboard(won, reward = null) {
     if (won) updateSaveBest();
     state.save.leaderboard.push({
       name: state.save.profileName || "Unknown Soul",
@@ -2117,11 +2515,15 @@
       coins: state.bankedThisRun,
       weapon: getWeapon().name,
       character: getCharacter().name,
+      wings: getEquippedWings().name,
+      reward: reward?.name || "",
+      rewardUnlocked: Boolean(reward?.unlocked),
+      time: formatTime(state.elapsed),
       won,
       date: new Date().toLocaleDateString()
     });
     state.save.leaderboard.sort((a, b) => Number(b.won) - Number(a.won) || b.stage - a.stage || b.coins - a.coins);
-    state.save.leaderboard = state.save.leaderboard.slice(0, 8);
+    state.save.leaderboard = state.save.leaderboard.slice(0, 12);
     renderLeaderboard();
     persistSave();
   }
@@ -2170,7 +2572,7 @@
       button.innerHTML = `
         <span>Slot ${profile.slot}</span>
         <strong>${profile.profileName}</strong>
-        <em>Gate ${profile.bestStage} - ${profile.coins} coins</em>
+        <em>Gate ${profile.bestStage} - ${profile.coins} coins${profile.hasSeraphWings ? " - Seraph Wings" : ""}</em>
       `;
       button.addEventListener("click", () => switchProfile(profile.slot));
       profileSlots.appendChild(button);
@@ -2241,6 +2643,7 @@
     updateEquippedSummary();
     updateSettingsButtons();
     renderSkillHud(true);
+    renderDomainMeter(true);
     persistSave();
   }
 
@@ -2295,24 +2698,70 @@
   }
 
   function renderLoadout() {
-    if (!weaponLoadoutGrid || !characterLoadoutGrid) return;
+    if (!weaponLoadoutGrid || !characterLoadoutGrid || !wingsLoadoutGrid) return;
     loadoutWalletValue.textContent = state.save.coins;
     weaponLoadoutGrid.replaceChildren();
     characterLoadoutGrid.replaceChildren();
+    wingsLoadoutGrid.replaceChildren();
     for (const [id, item] of Object.entries(weapons)) {
       weaponLoadoutGrid.appendChild(createItemCard({ type: "weapon", id, ...item }, true));
     }
     for (const [id, item] of Object.entries(characters)) {
       characterLoadoutGrid.appendChild(createItemCard({ type: "character", id, icon: item.color, ...item }, true));
     }
+    for (const [id, item] of Object.entries(wings)) {
+      wingsLoadoutGrid.appendChild(createItemCard({ type: "wings", id, ...item }, true));
+    }
     updateEquippedSummary();
     renderSkillDetails({ type: "character", id: state.save.equippedCharacter, icon: getCharacter().color, ...getCharacter() });
   }
 
+  function getOwnedList(type) {
+    if (type === "weapon") return state.save.ownedWeapons;
+    if (type === "wings") return state.save.ownedWings;
+    return state.save.ownedCharacters;
+  }
+
+  function isItemOwned(item) {
+    return getOwnedList(item.type).includes(item.id);
+  }
+
+  function isItemEquipped(item) {
+    if (item.type === "weapon") return state.save.equippedWeapon === item.id;
+    if (item.type === "wings") return state.save.equippedWings === item.id;
+    return state.save.equippedCharacter === item.id;
+  }
+
+  function getItemBadge(item, owned, equipped, level) {
+    if (equipped) return "Equipped";
+    if (owned) return item.type === "weapon" ? `Lv ${level}` : "Owned";
+    if (item.rewardOnly) return "Relic";
+    return `${item.cost} coins`;
+  }
+
+  function getItemButtonLabel(item, owned, equipped) {
+    if (equipped) return "Equipped";
+    if (owned) return "Equip";
+    if (item.rewardOnly) return "Defeat The One Above";
+    return `Buy ${item.cost}`;
+  }
+
+  function getItemDetailHtml(item, skillList, level) {
+    if (item.type === "weapon") {
+      const stats = getWeaponStats(item.id);
+      return `<small>Level ${level}/5 - Damage ${stats.damage} - Range ${stats.range}</small>`;
+    }
+    if (item.type === "wings") {
+      if (item.id === "none") return "<small>No armor relic bonus active.</small>";
+      return `<small>+${item.health || 0} heart - +${item.speed || 0} speed - ${Math.round((item.reviveCooldown || 0) / 1000)}s revive cooldown</small>`;
+    }
+    return skillList;
+  }
+
   function createItemCard(item, showLocked = false) {
-    const owned = item.type === "weapon" ? state.save.ownedWeapons.includes(item.id) : state.save.ownedCharacters.includes(item.id);
-    const equipped = item.type === "weapon" ? state.save.equippedWeapon === item.id : state.save.equippedCharacter === item.id;
-    const locked = state.save.coins < item.cost && !owned;
+    const owned = isItemOwned(item);
+    const equipped = isItemEquipped(item);
+    const locked = item.rewardOnly && !owned ? true : state.save.coins < item.cost && !owned;
     const level = item.type === "weapon" ? getWeaponLevel(item.id) : 0;
     const upgradeCost = item.type === "weapon" ? getUpgradeCost(item.id) : 0;
     const maxed = item.type === "weapon" && level >= 5;
@@ -2324,12 +2773,12 @@
     card.innerHTML = `
       <div class="shop-card-head">
         <div class="shop-icon ${item.icon || item.id}"></div>
-        <span class="item-badge">${equipped ? "Equipped" : owned ? item.type === "weapon" ? `Lv ${level}` : "Owned" : `${item.cost} coins`}</span>
+        <span class="item-badge">${getItemBadge(item, owned, equipped, level)}</span>
       </div>
-      <div><h3>${item.name}</h3><p>${item.desc}</p>${item.type === "weapon" ? `<small>Level ${level}/5 - Damage ${getWeaponStats(item.id).damage} - Range ${getWeaponStats(item.id).range}</small>` : skillList}</div>
+      <div><h3>${item.name}</h3><p>${item.desc}</p>${getItemDetailHtml(item, skillList, level)}</div>
     `;
     const button = document.createElement("button");
-    button.textContent = equipped ? "Equipped" : owned ? "Equip" : `Buy ${item.cost}`;
+    button.textContent = getItemButtonLabel(item, owned, equipped);
     button.disabled = equipped || (!owned && locked);
     button.addEventListener("click", () => buyOrEquip(item));
     card.appendChild(button);
@@ -2355,13 +2804,14 @@
     document.querySelectorAll(".loadout-tab").forEach((button) => button.classList.toggle("active", button.dataset.loadoutTab === tab));
     weaponLoadoutGrid.classList.toggle("hidden", tab !== "weapons");
     characterLoadoutGrid.classList.toggle("hidden", tab !== "characters");
+    wingsLoadoutGrid.classList.toggle("hidden", tab !== "wings");
     playSound("click");
   }
 
   function buyOrEquip(item) {
-    const ownedList = item.type === "weapon" ? state.save.ownedWeapons : state.save.ownedCharacters;
+    const ownedList = getOwnedList(item.type);
     if (!ownedList.includes(item.id)) {
-      if (state.save.coins < item.cost) return;
+      if (item.rewardOnly || state.save.coins < item.cost) return;
       state.save.coins -= item.cost;
       ownedList.push(item.id);
       if (item.type === "weapon") state.save.weaponLevels[item.id] ||= 1;
@@ -2370,7 +2820,8 @@
       playSound("click");
     }
     if (item.type === "weapon") state.save.equippedWeapon = item.id;
-    else state.save.equippedCharacter = item.id;
+    else if (item.type === "character") state.save.equippedCharacter = item.id;
+    else if (item.type === "wings") state.save.equippedWings = item.id;
     updatePlayerSkin();
     renderShop();
     renderLoadout();
@@ -2425,6 +2876,25 @@
       `;
       return;
     }
+    if (item.type === "wings") {
+      if (item.id === "none") {
+        skillDetails.innerHTML = `
+          <h3>${item.name}</h3>
+          <p>${item.desc}</p>
+        `;
+        return;
+      }
+      skillDetails.innerHTML = `
+        <h3>${item.name}</h3>
+        <p>${item.desc}</p>
+        <ul>
+          <li><b>Final Miracle</b><span>Revives once when ready, even against The One Above absolute attacks.</span></li>
+          <li><b>Grace Window</b><span>${Math.round((item.reviveImmunityMs || 0) / 1000)}s immunity, ${Math.round((item.reviveBoostMs || 0) / 1000)}s haste and shield.</span></li>
+          <li><b>Relic Body</b><span>+${item.health || 0} heart, +${item.speed || 0} speed, +${item.magnet || 0} coin magnet.</span></li>
+        </ul>
+      `;
+      return;
+    }
     const skills = item.skills || [];
     skillDetails.innerHTML = `
       <h3>${item.name}</h3>
@@ -2436,16 +2906,24 @@
   function updateEquippedSummary() {
     const weapon = getWeapon();
     const character = getCharacter();
+    const wing = getEquippedWings();
     if (equippedWeaponValue) equippedWeaponValue.textContent = `${weapon.name} Lv ${weapon.level || 1}`;
     if (equippedCharacterValue) equippedCharacterValue.textContent = character.name;
+    if (equippedWingsValue) equippedWingsValue.textContent = wing.name;
     if (modeCoinsValue) modeCoinsValue.textContent = state.save.coins;
     if (modeProfileValue) modeProfileValue.textContent = state.save.profileName || "Unknown Soul";
     if (loadoutWeaponValue) loadoutWeaponValue.textContent = `${weapon.name} Lv ${weapon.level || 1}`;
     if (loadoutCharacterValue) loadoutCharacterValue.textContent = character.name;
+    if (loadoutWingsValue) loadoutWingsValue.textContent = wing.name;
     if (loadoutWalletValue) loadoutWalletValue.textContent = state.save.coins;
     if (weaponStatus) {
       weaponStatus.className = `weapon-status ${state.save.equippedWeapon}`;
       weaponStatus.innerHTML = `<span>Weapon</span><strong>${weapon.name} Lv ${weapon.level || 1}</strong>`;
+    }
+    if (wingStatus) {
+      const active = state.save.equippedWings !== "none";
+      wingStatus.className = `wing-status ${state.save.equippedWings}${active ? "" : " hidden"}`;
+      wingStatus.innerHTML = active ? `<span>Relic</span><strong>${wing.name}</strong>` : "";
     }
   }
 
@@ -2469,19 +2947,51 @@
   }
 
   function renderLeaderboard() {
+    if (leaderboardStats) renderLeaderboardStats();
     leaderboardList.replaceChildren();
     if (!state.save.leaderboard.length) {
       const empty = document.createElement("li");
+      empty.className = "hall-entry empty";
       empty.textContent = "No souls recorded yet. Go make the dominion remember you.";
       leaderboardList.appendChild(empty);
       return;
     }
-    for (const run of state.save.leaderboard) {
+    state.save.leaderboard.forEach((run, index) => {
       const li = document.createElement("li");
       const name = run.name || state.save.profileName || "Unknown Soul";
-      li.textContent = `${name} - ${run.won ? "Victory" : run.stageName || `Stage ${run.stage}`} - ${run.coins} coins - ${run.character} / ${run.weapon} - ${run.date}`;
+      const status = run.won ? "Dominion Conquered" : run.stageName || `Gate ${run.stage}`;
+      li.className = `hall-entry${run.won ? " victory" : ""}${run.rewardUnlocked ? " relic-run" : ""}`;
+      li.innerHTML = `
+        <span class="hall-rank">${index + 1}</span>
+        <div class="hall-main">
+          <strong>${name}</strong>
+          <em>${status}</em>
+          <small>${run.date || "Unknown date"} - ${run.time || "0:00"}</small>
+        </div>
+        <div class="hall-meta">
+          <span>${run.coins || 0} coins</span>
+          <span>Gate ${run.stage || 1}</span>
+          <span>${run.character || "Unknown"} / ${run.weapon || "Unknown"}</span>
+          ${run.wings ? `<span>${run.wings}</span>` : ""}
+          ${run.reward ? `<b>${run.rewardUnlocked ? "New relic" : "Relic bound"}: ${run.reward}</b>` : ""}
+        </div>
+      `;
       leaderboardList.appendChild(li);
-    }
+    });
+  }
+
+  function renderLeaderboardStats() {
+    const entries = state.save.leaderboard || [];
+    const victories = entries.filter((run) => run.won).length;
+    const totalCoins = entries.reduce((sum, run) => sum + (Number(run.coins) || 0), 0);
+    const bestStage = entries.reduce((best, run) => Math.max(best, Number(run.stage) || 1), Number(state.save.bestStage) || 1);
+    const hasWings = state.save.ownedWings?.includes("seraph");
+    leaderboardStats.innerHTML = `
+      <div><span>Victories</span><strong>${victories}</strong></div>
+      <div><span>Best gate</span><strong>${bestStage}</strong></div>
+      <div><span>Recorded coins</span><strong>${totalCoins}</strong></div>
+      <div class="${hasWings ? "relic-owned" : ""}"><span>Relic</span><strong>${hasWings ? wings.seraph.name : "Unclaimed"}</strong></div>
+    `;
   }
 
   function exportSaveFile() {
@@ -2597,6 +3107,14 @@
     }
   }
 
+  function resetNightOverlayInstant() {
+    state.nightActive = false;
+    nightOverlay.classList.add("resetting");
+    nightOverlay.classList.remove("active");
+    void nightOverlay.offsetWidth;
+    nightOverlay.classList.remove("resetting");
+  }
+
   function render() {
     updatePlayerElement();
     for (const enemy of state.enemies) {
@@ -2653,6 +3171,7 @@
     playerEl.classList.toggle("boosted", getPowerTimeLeft("boost") > 0 || performance.now() < state.rageUntil);
     playerEl.classList.toggle("shielded", getPowerTimeLeft("shield") > 0 || state.shieldCharges > 0);
     playerEl.classList.toggle("void-barrier", performance.now() < state.voidBarrierUntil);
+    playerEl.classList.toggle("wing-grace", performance.now() < state.wingGraceUntil);
   }
 
   function renderPowerStatus(force = false) {
@@ -2662,6 +3181,8 @@
       .filter((power) => power.left > 0);
     if (now < state.rageUntil) active.push({ type: "boost", left: state.rageUntil - now });
     if (now < state.voidBarrierUntil) active.push({ type: "void", left: state.voidBarrierUntil - now });
+    if (now < state.wingGraceUntil) active.push({ type: "wings", left: state.wingGraceUntil - now });
+    else if (state.wingReviveReadyAt > now) active.push({ type: "wings", left: state.wingReviveReadyAt - now });
     const signature = active.map((power) => `${power.type}:${Math.ceil(power.left / 1000)}`).join("|");
     if (!force && signature === state.renderedPowers) return;
     state.renderedPowers = signature;
@@ -2679,7 +3200,7 @@
     const skills = getCharacter().skills || [];
     const now = performance.now();
     const signature = skills
-      .map((skill) => `${skill.slot}:${skill.name}:${Math.max(0, Math.ceil(((state.skillCooldowns[skill.slot] || 0) - now) / 1000))}`)
+      .map((skill) => `${skill.slot}:${skill.name}:${Math.max(0, Math.ceil(((state.skillCooldowns[skill.slot] || 0) - now) / 1000))}:${["voidDomain", "voidEclipse"].includes(skill.effect) ? `${Math.floor(state.voidDomainCharge)}:${Math.ceil(Math.max(0, state.voidDomainUntil - now) / 1000)}` : ""}`)
       .join("|");
 
     if (!force && signature === state.renderedSkillSignature) return;
@@ -2689,20 +3210,50 @@
 
     for (const skill of skills) {
       const readyAt = state.skillCooldowns[skill.slot] || 0;
-      const left = Math.max(0, readyAt - now);
+      const isDomain = skill.effect === "voidDomain";
+      const isDomainOnly = skill.effect === "voidEclipse";
+      const domainActive = isDomain && now < state.voidDomainUntil;
+      const voidDomainActive = getCharacter().void && now < state.voidDomainUntil;
+      const domainLocked = isDomainOnly && !voidDomainActive;
+      const left = domainActive ? state.voidDomainUntil - now : Math.max(0, readyAt - now);
+      const domainReady = isDomain && state.voidDomainCharge >= 100 && !domainActive;
       const button = document.createElement("button");
-      button.className = `skill-slot${left ? " cooling" : ""}`;
+      button.className = `skill-slot${left ? " cooling" : ""}${isDomain ? " domain-skill" : ""}${domainReady ? " domain-ready" : ""}${domainActive ? " domain-active" : ""}${domainLocked ? " domain-locked" : ""}${isDomainOnly && voidDomainActive ? " domain-ready" : ""}`;
       button.type = "button";
-      button.disabled = Boolean(left);
+      button.disabled = Boolean(left) || (isDomain && !domainReady) || domainLocked;
       button.title = `${skill.name}: ${skill.desc}`;
       button.innerHTML = `
         <span>${skill.slot}</span>
         <strong>${skill.name}</strong>
-        <small>${left ? `${Math.ceil(left / 1000)}s` : "Ready"}</small>
+        <small>${isDomain ? domainActive ? `${Math.ceil(left / 1000)}s` : domainReady ? "Ready" : `${Math.floor(state.voidDomainCharge)}%` : domainLocked ? "Domain" : left ? `${Math.ceil(left / 1000)}s` : "Ready"}</small>
       `;
       button.addEventListener("click", () => useSkill(skill.slot));
       skillHud.appendChild(button);
     }
+  }
+
+  function renderDomainMeter(force = false) {
+    if (!domainMeter) return;
+    const character = getCharacter();
+    const now = performance.now();
+    const active = character.void && ["playing", "paused", "celebrating"].includes(state.mode);
+    domainMeter.classList.toggle("hidden", !active);
+    if (!active) return;
+    const charge = Math.floor(state.voidDomainCharge);
+    const domainLeft = Math.max(0, state.voidDomainUntil - now);
+    const ready = charge >= 100 && !domainLeft;
+    const signature = `${charge}:${Math.ceil(domainLeft / 1000)}:${ready}:${state.health}:${state.maxHealth}`;
+    if (!force && signature === state.renderedDomainSignature) return;
+    state.renderedDomainSignature = signature;
+    domainMeter.classList.toggle("ready", ready);
+    domainMeter.classList.toggle("active", Boolean(domainLeft));
+    domainMeter.style.setProperty("--domain-charge", `${charge}%`);
+    domainMeter.innerHTML = `
+      <span>Domain</span>
+      <strong>${domainLeft ? "Expanded" : ready ? "Ready" : `${charge}%`}</strong>
+      <i><b></b></i>
+      <em>${domainLeft ? `${Math.ceil(domainLeft / 1000)}s` : ready ? "Press 4" : "Build slowly"}</em>
+    `;
   }
 
   function buildHealth() {
@@ -2720,12 +3271,13 @@
     const character = getCharacter();
     const skins = {
       god: "assets/player-god.svg",
-      void: "assets/player-void.svg"
+      void: "assets/player-void.svg?v=2"
     };
     const hue = { blue: "hue-rotate(0deg)", green: "hue-rotate(115deg)", red: "hue-rotate(155deg) saturate(1.8)", yellow: "hue-rotate(205deg) saturate(1.5)", cyan: "hue-rotate(0deg)", god: "brightness(1.1)", void: "drop-shadow(0 0 14px rgba(130, 105, 255, .7))" };
     playerEl.style.backgroundImage = `url("${skins[character.color] || "assets/player.svg"}")`;
     playerEl.style.filter = `drop-shadow(0 10px 10px rgba(4, 40, 44, .28)) ${hue[character.color] || ""}`;
     playerEl.dataset.weapon = state.save.equippedWeapon;
+    playerEl.dataset.wings = state.save.equippedWings || "none";
   }
 
   function clearDynamicElements() {
@@ -2742,6 +3294,10 @@
     state.shieldCharges = 0;
     state.boss = null;
     state.deathTaunt = "";
+    state.voidDomainUntil = 0;
+    state.voidDomainFreezeUntil = 0;
+    state.nextVoidDomainTickAt = 0;
+    state.nextVoidRegenAt = 0;
     state.arenaScale = 1;
     gameWrap.style.setProperty("--arena-scale", "1");
     gameWrap.style.setProperty("--arena-view-scale", "1");
@@ -2749,6 +3305,11 @@
     state.divineOverdriveUntil = 0;
     state.nextDivineBeamAt = 0;
     state.voidBarrierUntil = 0;
+    state.lastVoidTrailAt = 0;
+    state.wingReviveReadyAt = 0;
+    state.wingGraceUntil = 0;
+    state.wingReviveCount = 0;
+    state.lastWingGraceTextAt = 0;
     state.lastBlinkAt = 0;
     state.screenEffectUntil = 0;
     enemyLayer.replaceChildren();
@@ -2756,10 +3317,12 @@
     effectLayer.replaceChildren();
     gameWrap.querySelectorAll(".boss-dialogue").forEach((item) => item.remove());
     gameWrap.querySelectorAll(".prime-warning").forEach((item) => item.remove());
+    gameWrap.querySelectorAll(".void-domain-cutin").forEach((item) => item.remove());
     powerStatus.replaceChildren();
-    playerEl.classList.remove("boosted", "shielded", "low-health", "invincible", "divine-overdrive", "void-barrier");
-    gameWrap.classList.remove("one-above-arena", "one-above-wrath");
-    nightOverlay.classList.remove("active");
+    if (domainMeter) domainMeter.classList.add("hidden");
+    playerEl.classList.remove("boosted", "shielded", "low-health", "invincible", "divine-overdrive", "void-barrier", "wing-grace");
+    gameWrap.classList.remove("one-above-arena", "one-above-wrath", "void-domain-active");
+    resetNightOverlayInstant();
   }
 
   function setEntityTransform(element, x, y, facing = 1) {
@@ -2866,6 +3429,10 @@
 
   function getWeapon() {
     return getWeaponStats(state.save.equippedWeapon);
+  }
+
+  function getEquippedWings() {
+    return wings[state.save.equippedWings] || wings.none;
   }
 
   function getCharacter() {

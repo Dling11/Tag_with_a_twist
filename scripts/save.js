@@ -5,7 +5,7 @@
   const LEGACY_STORAGE_KEY = "verdant-rush-save-v3";
   const ACTIVE_SLOT_KEY = `${STORAGE_KEY}-active-slot`;
   const SLOT_COUNT = 3;
-  const { defaultSave, weapons, characters } = window.VerdantRushContent;
+  const { defaultSave, weapons, wings, characters } = window.VerdantRushContent;
 
   function defaultProfileName(slot) {
     return slot === 1 ? "Rowell" : `Player ${slot}`;
@@ -48,9 +48,10 @@
     const profileSlot = normalizeSlot(forcedSlot || candidate.profileSlot || getActiveSlot());
     const profileName = cleanName(candidate.profileName, defaultProfileName(profileSlot));
     const ownedWeapons = Array.from(new Set(["default", ...(candidate.ownedWeapons || [])])).filter((id) => weapons[id]);
+    const ownedWings = Array.from(new Set(["none", ...(candidate.ownedWings || [])])).filter((id) => wings[id]);
     const ownedCharacters = Array.from(new Set(["blue", ...(candidate.ownedCharacters || [])])).filter((id) => characters[id]);
     const leaderboard = Array.isArray(candidate.leaderboard)
-      ? candidate.leaderboard.slice(0, 8).map((run) => ({ ...run, name: cleanName(run.name || profileName, profileName) }))
+      ? candidate.leaderboard.slice(0, 12).map((run) => ({ ...run, name: cleanName(run.name || profileName, profileName) }))
       : [];
     const coins = Math.max(0, Math.floor(Number(candidate.coins) || 0));
     const bestStage = Math.max(1, Math.min(11, Math.floor(Number(candidate.bestStage) || 1)));
@@ -74,6 +75,8 @@
       ownedWeapons,
       equippedWeapon: ownedWeapons.includes(candidate.equippedWeapon) && weapons[candidate.equippedWeapon] ? candidate.equippedWeapon : "default",
       weaponLevels,
+      ownedWings,
+      equippedWings: ownedWings.includes(candidate.equippedWings) && wings[candidate.equippedWings] ? candidate.equippedWings : "none",
       ownedCharacters,
       equippedCharacter: ownedCharacters.includes(candidate.equippedCharacter) && characters[candidate.equippedCharacter] ? candidate.equippedCharacter : "blue",
       leaderboard,
@@ -115,7 +118,9 @@
         profileName: save.profileName,
         bestStage: save.bestStage,
         coins: save.coins,
-        character: characters[save.equippedCharacter]?.name || "Blue"
+        character: characters[save.equippedCharacter]?.name || "Blue",
+        wings: wings[save.equippedWings]?.name || "No Wings",
+        hasSeraphWings: save.ownedWings?.includes("seraph") || false
       });
     }
     setActiveSlot(activeSlot);
