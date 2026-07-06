@@ -42,6 +42,7 @@ Use this file as the handoff note for future Codex conversations. If continuing 
 - Added custom God SVG art and five absurd premium God skills.
 - Added boss-clear celebration with portal/gate animation before stage clear.
 - Added lightweight generated WebAudio music loop plus stronger skill/ultimate/portal sound effects.
+- Made generated WebAudio music more reliable by warming the audio context on player input, starting the first music step immediately after gameplay begins, and slightly raising the procedural theme volumes.
 - Renamed the premium God character display name to `The Divine One`.
 - Added settings buttons for sound on/off in the main menu and pause menu.
 - Added visible equipped weapon HUD plus weapon art attached to the player.
@@ -62,12 +63,16 @@ Use this file as the handoff note for future Codex conversations. If continuing 
 - Added `Divine Overdrive`, a 10-second blue-gold aura mode with blink movement, immunity, and all-direction divine beams.
 - Swapped The Divine One skills so `Reality Crack` is skill `4` and the more broken `Divine Overdrive` is skill `5`.
 - The Divine One has quiet passive immunity only on stages 1-9. Stage 10+ can damage him normally, with the revive/overdrive fantasy still intact; do not use the normal `.invincible` blink for passive divine blocks because it caused stage-10 flicker. The normal invincibility blink was softened to a slower shimmer instead of a harsh strobe.
+- The normal `.invincible` state is now a smooth glow instead of opacity/filter blinking, and `Divine Overdrive` aura animates box-shadow instead of filter so non-Void characters and The Divine One do not visually flicker on stages 1-10.
+- Player sprites should not use live CSS color/brightness/drop-shadow filters while moving. Blue, Green, Red, Yellow, and Cyan now use dedicated SVG assets, and `updatePlayerSkin()` clears player filters to avoid browser shimmer/flicker.
 - The Divine One execute skills use normal boss thresholds on regular bosses, but The One Above phase 2 can only be executed at 8% HP or lower. Against The One Above phase 2, Celestial Verdict direct boss damage is 7.5% max HP and Reality Crack direct boss damage is 9.5% max HP instead of their normal 28%/32% chunks.
 - Improved The Divine One music with a separate blue-gold divine theme, overdrive variation, and simple angelic choir-style sine chords.
 - Split input constants and audio into separate scripts so future skills/bosses can be expanded more safely.
 - Delayed boss-clear gate text until large skill text finishes, reducing the weird mixed-word overlap.
 - Revised final-boss wording toward the empty-throne / godlike-anime tone.
 - Stage start now applies the stage theme before decoration generation and force-clears night/domain/arena overlays instantly, preventing stage 1 from briefly looking like a night stage after previous runs.
+- Polished stage 8 `Mirror Crown` visuals: mirror teleport now uses afterimage/crown shockwaves, softer mirror hazard pulses, and a slower mirror-night overlay fade so the stage reads intentional instead of flickery.
+- The night/day atmosphere overlay is intentionally static now. Do not update its radial center every frame from player position, because that caused whole-screen night/day shimmer during fast movement; the cycle is now slower and fades softly.
 - Verified with syntax checks and headless Edge smoke tests.
 
 ## Current Design Direction

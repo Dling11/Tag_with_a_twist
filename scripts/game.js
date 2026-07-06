@@ -13,6 +13,7 @@
   const saveStore = window.VerdantRushStorage;
   const inputConfig = window.VerdantRushInput;
   const ONE_ABOVE_ARENA_SCALE = 1.75;
+  const NIGHT_CYCLE_MS = 90000;
 
   const $ = (id) => document.getElementById(id);
   const gameWrap = $("gameWrap");
@@ -342,8 +343,9 @@
     state.bankedThisRun = 0;
     state.voidDomainCharge = 0;
     state.renderedDomainSignature = "";
-    startMusic();
+    warmAudio();
     startStage(stage, options);
+    startMusic();
   }
 
   function startStage(stage, options = {}) {
@@ -443,9 +445,11 @@
 
   function resumeGame() {
     if (state.mode !== "paused") return;
+    warmAudio();
     playSound("click");
     state.mode = "playing";
     showScreen(null);
+    startMusic();
     state.lastTime = performance.now();
     animationId = requestAnimationFrame(loop);
   }
@@ -1442,12 +1446,20 @@
       const oldX = boss.x;
       const oldY = boss.y;
       const point = randomOpenPoint(220);
+      const element = boss.element;
+      element?.classList.add("mirror-phase");
+      createShockwave(oldX, oldY, 280, "mirror", "AFTERIMAGE");
+      burst(oldX, oldY, 24, ["#ffffff", "#d8f7ff", "#c8a0ff"]);
       boss.x = point.x;
       boss.y = point.y;
-      createHazard(oldX, oldY, 58, 360, 320, 1, "mirror");
-      createHazard(boss.x, boss.y, 58, 560, 320, 1, "mirror");
+      if (element) setEntityTransform(element, boss.x, boss.y, boss.facing);
+      createShockwave(boss.x, boss.y, 360, "mirror", "CROWN");
+      createHazard(oldX, oldY, 60, 460, 360, 1, "mirror");
+      createHazard(boss.x, boss.y, 66, 680, 380, 1, "mirror");
+      burst(boss.x, boss.y, 34, ["#ffffff", "#b9f5ff", "#b57cff"]);
       spawnEnemy(true, "runner");
       floatText("MIRROR STEP", boss.x, boss.y - 70);
+      queueTimer(() => element?.classList.remove("mirror-phase"), 520);
     } else if (skill === "haste") {
       state.enemyHasteUntil = performance.now() + 3800;
       spawnEnemy(true);
@@ -2934,7 +2946,11 @@
       sfx: !enabled
     };
     if (!state.save.settings.music) stopMusic();
-    else if (state.mode === "playing") startMusic();
+    else {
+      warmAudio();
+      playSound("click");
+      if (state.mode === "playing") startMusic();
+    }
     updateSettingsButtons();
     persistSave();
   }
@@ -3098,8 +3114,8 @@
 
   function updateStageAtmosphere() {
     const shouldUseNightCycle = state.mode === "playing" && getStageInfo().nightCycle;
-    const cycle = (state.elapsed % 30000) / 30000;
-    const isNight = shouldUseNightCycle && cycle > .5;
+    const cycle = (state.elapsed % NIGHT_CYCLE_MS) / NIGHT_CYCLE_MS;
+    const isNight = shouldUseNightCycle && cycle > .58;
     if (state.nightActive !== isNight) {
       state.nightActive = isNight;
       nightOverlay.classList.toggle("active", isNight);
@@ -3132,9 +3148,6 @@
   function updatePlayerElement() {
     setEntityTransform(playerEl, state.player.x, state.player.y, state.player.facing);
     playerEl.style.zIndex = String(20 + Math.round(state.player.y));
-    const viewScale = 1 / (state.arenaScale || 1);
-    nightOverlay.style.setProperty("--px", `${state.player.x * viewScale}px`);
-    nightOverlay.style.setProperty("--py", `${state.player.y * viewScale}px`);
   }
 
   function updateBossBar() {
@@ -3270,12 +3283,17 @@
   function updatePlayerSkin() {
     const character = getCharacter();
     const skins = {
+      blue: "assets/player-blue.svg",
+      green: "assets/player-green.svg",
+      red: "assets/player-red.svg",
+      yellow: "assets/player-yellow.svg",
+      cyan: "assets/player-cyan.svg",
       god: "assets/player-god.svg",
       void: "assets/player-void.svg?v=2"
     };
-    const hue = { blue: "hue-rotate(0deg)", green: "hue-rotate(115deg)", red: "hue-rotate(155deg) saturate(1.8)", yellow: "hue-rotate(205deg) saturate(1.5)", cyan: "hue-rotate(0deg)", god: "brightness(1.1)", void: "drop-shadow(0 0 14px rgba(130, 105, 255, .7))" };
-    playerEl.style.backgroundImage = `url("${skins[character.color] || "assets/player.svg"}")`;
-    playerEl.style.filter = `drop-shadow(0 10px 10px rgba(4, 40, 44, .28)) ${hue[character.color] || ""}`;
+    playerEl.style.backgroundImage = `url("${skins[character.color] || "assets/player-blue.svg"}")`;
+    playerEl.style.removeProperty("filter");
+    playerEl.dataset.character = character.color || "blue";
     playerEl.dataset.weapon = state.save.equippedWeapon;
     playerEl.dataset.wings = state.save.equippedWings || "none";
   }
@@ -3482,6 +3500,10 @@
 
   function startMusic() {
     audio.startMusic();
+  }
+
+  function warmAudio() {
+    audio.warmAudio?.();
   }
 
   function stopMusic() {

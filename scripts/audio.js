@@ -4,29 +4,44 @@
   function createAudioSystem({ getSettings, getMode, getCharacter, getStage, getBoss, isDivineOverdriveActive, isVoidDomainActive }) {
     let audioContext = null;
     let musicTimer = 0;
+    let musicPrimer = 0;
     let musicStep = 0;
     let playerActivated = false;
 
     const markPlayerActivated = (event) => {
-      if (event.isTrusted) playerActivated = true;
+      if (!event || event.isTrusted !== false) {
+        playerActivated = true;
+        warmAudio();
+      }
     };
 
     window.addEventListener("pointerdown", markPlayerActivated, { capture: true });
     window.addEventListener("keydown", markPlayerActivated, { capture: true });
 
     function startMusic() {
-      if (musicTimer || getSettings()?.music === false) return;
-      musicStep = 0;
-      musicTimer = window.setInterval(() => {
-        if (getMode() !== "playing") return;
-        playMusicStep();
-      }, 680);
+      if (getSettings()?.music === false) return;
+      warmAudio();
+      if (!musicTimer) {
+        musicStep = 0;
+        musicTimer = window.setInterval(() => {
+          if (getMode() !== "playing") return;
+          playMusicStep();
+        }, 640);
+      }
+      if (getMode() === "playing") {
+        window.clearTimeout(musicPrimer);
+        musicPrimer = window.setTimeout(() => {
+          if (getMode() === "playing") playMusicStep();
+        }, 70);
+      }
     }
 
     function stopMusic() {
       if (!musicTimer) return;
       window.clearInterval(musicTimer);
+      window.clearTimeout(musicPrimer);
       musicTimer = 0;
+      musicPrimer = 0;
     }
 
     function playMusicStep() {
@@ -52,7 +67,7 @@
 
       const track = [262, 330, 392, 523];
       const note = track[musicStep % track.length];
-      playTone(note, .16, "sine", .016);
+      playTone(note, .18, "sine", .024);
       musicStep += 1;
     }
 
@@ -63,9 +78,9 @@
       const low = drone[musicStep % drone.length];
       const note = chant[Math.floor(musicStep / 2) % chant.length];
 
-      playTone(low, ascended ? .82 : .7, "sawtooth", ascended ? .026 : .018, low * .995);
-      playTone(note, ascended ? .42 : .34, "triangle", ascended ? .018 : .012);
-      if (musicStep % 3 === 2) playTone(note * 2, .9, "sine", ascended ? .012 : .008, note * 2.01);
+      playTone(low, ascended ? .86 : .74, "sawtooth", ascended ? .028 : .022, low * .995);
+      playTone(note, ascended ? .46 : .38, "triangle", ascended ? .02 : .015);
+      if (musicStep % 3 === 2) playTone(note * 2, .9, "sine", ascended ? .014 : .01, note * 2.01);
       if (ascended && musicStep % 4 === 1) playTone(41, .65, "square", .012);
       musicStep += 1;
     }
@@ -76,8 +91,8 @@
       const low = bass[musicStep % bass.length];
       const note = melody[Math.floor(musicStep / 2) % melody.length];
 
-      playTone(low, domainActive ? .92 : .54, domainActive ? "square" : "sawtooth", domainActive ? .024 : .018, low * .992);
-      playTone(note, domainActive ? .28 : .18, "triangle", domainActive ? .024 : .016, note * (domainActive ? 1.015 : 1.005));
+      playTone(low, domainActive ? .92 : .58, domainActive ? "square" : "sawtooth", domainActive ? .026 : .02, low * .992);
+      playTone(note, domainActive ? .3 : .2, "triangle", domainActive ? .026 : .018, note * (domainActive ? 1.015 : 1.005));
       if (musicStep % 2 === 1) playTone(note * 2, domainActive ? .38 : .26, "sine", domainActive ? .014 : .008);
       if (domainActive && musicStep % 3 === 2) playTone(39, .5, "sawtooth", .014, 41);
       musicStep += 1;
@@ -96,15 +111,31 @@
       const low = bass[Math.floor(musicStep / 2) % bass.length];
 
       playTone(note, overdrive ? .18 : .22, "triangle", overdrive ? .03 : .022);
-      if (musicStep % 2 === 0) playTone(low, .34, "sine", overdrive ? .018 : .012);
-      if (musicStep % 4 === 3) playTone(note * 1.5, .12, "sine", overdrive ? .022 : .014);
+      if (musicStep % 2 === 0) playTone(low, .34, "sine", overdrive ? .02 : .015);
+      if (musicStep % 4 === 3) playTone(note * 1.5, .12, "sine", overdrive ? .024 : .017);
       if (musicStep % 2 === 1) {
         const chord = choir[Math.floor(musicStep / 2) % choir.length];
         chord.forEach((frequency, index) => {
-          playTone(frequency * (index === 2 ? 2 : 1), overdrive ? .62 : .78, "sine", overdrive ? .011 : .0085, frequency * (index === 2 ? 2.01 : 1.005));
+          playTone(frequency * (index === 2 ? 2 : 1), overdrive ? .62 : .78, "sine", overdrive ? .014 : .011, frequency * (index === 2 ? 2.01 : 1.005));
         });
       }
       musicStep += 1;
+    }
+
+    function warmAudio() {
+      if (getSettings()?.music === false && getSettings()?.sfx === false) return false;
+      playerActivated = true;
+      try {
+        const context = ensureAudioContext();
+        if (context.state === "suspended") {
+          const resume = context.resume();
+          if (resume?.catch) resume.catch(() => {});
+        }
+        return true;
+      } catch {
+        audioContext = null;
+        return false;
+      }
     }
 
     function ensureAudioContext() {
@@ -181,7 +212,8 @@
       startMusic,
       stopMusic,
       playSound,
-      playTone
+      playTone,
+      warmAudio
     };
   }
 
